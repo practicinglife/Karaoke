@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,8 +35,8 @@ class KaraokeLibrary(Base):
     artist: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     primary_file: Mapped[str] = mapped_column(Text, nullable=False)
-    audio_file: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cdg_file: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_file: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cdg_file: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     folder: Mapped[str] = mapped_column(Text, nullable=False)
     extension: Mapped[str] = mapped_column(String(20), nullable=False)
     modified_time: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -56,14 +57,14 @@ class Song(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     artist: Mapped[str] = mapped_column(String(255), nullable=False)
     service: Mapped[str] = mapped_column(String(30), nullable=False)
-    url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    karaoke_library_id: Mapped[int | None] = mapped_column(
+    url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    karaoke_library_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("karaoke_library.id"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     user: Mapped[User] = relationship("User", back_populates="songs")
-    karaoke_library: Mapped[KaraokeLibrary | None] = relationship("KaraokeLibrary", back_populates="songs")
+    karaoke_library: Mapped[Optional[KaraokeLibrary]] = relationship("KaraokeLibrary", back_populates="songs")
     queue_items: Mapped[list["QueueItem"]] = relationship("QueueItem", back_populates="song")
 
 
@@ -76,7 +77,7 @@ class SessionRecord(Base):
     house_code: Mapped[str] = mapped_column(String(6), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="RUNNING")
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     house_name: Mapped[str] = mapped_column(String(100), nullable=False, default="Karaoke Ticker")
     admin_token: Mapped[str] = mapped_column(String(64), nullable=False)
     ticker_token: Mapped[str] = mapped_column(String(64), nullable=False)
