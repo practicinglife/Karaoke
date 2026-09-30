@@ -13,10 +13,13 @@ try {
 
 	Write-Host "[release] Building Windows executable..."
 	& .\build.bat
+	if ($LASTEXITCODE -ne 0) {
+		throw "build.bat failed with exit code $LASTEXITCODE."
+	}
 
-if (!(Test-Path ".\dist\KaraokeTicker.exe")) {
-	throw "KaraokeTicker.exe was not produced."
-}
+	if (!(Test-Path ".\dist\KaraokeTicker.exe")) {
+		throw "KaraokeTicker.exe was not produced."
+	}
 
 $innoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 if (!(Test-Path $innoCompiler)) {
