@@ -4,8 +4,15 @@ Param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "[release] Building Windows executable..."
-& .\build.bat
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+Push-Location $repoRoot
+try {
+	if (!(Test-Path ".\data")) {
+		New-Item -ItemType Directory -Path ".\data" | Out-Null
+	}
+
+	Write-Host "[release] Building Windows executable..."
+	& .\build.bat
 
 if (!(Test-Path ".\dist\KaraokeTicker.exe")) {
 	throw "KaraokeTicker.exe was not produced."
@@ -14,7 +21,7 @@ if (!(Test-Path ".\dist\KaraokeTicker.exe")) {
 $innoCompiler = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
 if (!(Test-Path $innoCompiler)) {
 	Write-Warning "Inno Setup compiler not found at '$innoCompiler'. Skipping setup build."
-	exit 0
+	return
 }
 
 Write-Host "[release] Building Windows installer..."
@@ -25,3 +32,7 @@ if (!(Test-Path ".\dist\KaraokeTickerSetup.exe")) {
 }
 
 Write-Host "[release] Windows artifacts ready in .\dist"
+}
+finally {
+	Pop-Location
+}

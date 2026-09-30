@@ -10,6 +10,10 @@ echo Installing dependencies...
 call .venv\Scripts\python.exe -m pip install --upgrade pip
 call .venv\Scripts\python.exe -m pip install -r requirements.txt
 
+if not exist "data" (
+  mkdir data
+)
+
 echo Building KaraokeTicker.exe...
 call .venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --windowed --name KaraokeTicker ^
   --hidden-import engineio.async_drivers.threading ^
