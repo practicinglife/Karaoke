@@ -1,0 +1,15 @@
+.venv/
+env/
+.vs/
+__pycache__/
+.pytest_cache/
+node_modules/
+PSTools/
+temp/
+build/
+dist/
+*.spec
+data/
+logs/
+*.pyc
+

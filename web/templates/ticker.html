@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Display</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/ticker.css') }}">
+</head>
+<body>
+  <button id="fullscreen-btn">FULL SCREEN</button>
+  <section class="ticker-panel">
+    <h1>NOW SINGING</h1>
+    <div id="now-singer">Waiting...</div>
+    <div id="now-song"></div>
+    <div id="now-artist"></div>
+  </section>
+  <section class="ticker-panel">
+    <h2>UP NEXT</h2>
+    <ol id="up-next"></ol>
+  </section>
+  
+  <script>
+    window.KT_TICKER = { token: "{{ token }}" };
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='js/ticker.js') }}"></script>
+</body>
+</html>
+

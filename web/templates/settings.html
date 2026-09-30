@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Settings</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>Settings</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('web.settings_post', token=token) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>House Name</label>
+      <input name="house_name" value="{{ values['house_name'] }}" maxlength="100" required>
+      <label>Karaoke Folder</label>
+      <input name="karaoke_folder" value="{{ values['karaoke_folder'] }}">
+      <label>Playback Mode</label>
+      <label><input type="radio" name="playback_mode" value="built_in" {% if values['playback_mode'] == 'built_in' %}checked{% endif %}> Built-In Player</label>
+      <label><input type="radio" name="playback_mode" value="system_default" {% if values['playback_mode'] == 'system_default' %}checked{% endif %}> System Default</label>
+      <label><input type="radio" name="playback_mode" value="external_application" {% if values['playback_mode'] == 'external_application' %}checked{% endif %}> External Application</label>
+      <label>External Application Path (optional)</label>
+      <input name="external_application_path" value="{{ values['external_application_path'] }}" placeholder="C:\\Path\\Player.exe or /usr/bin/mpv">
+      <label>Traditional Karaoke Server URL</label>
+      <input name="traditional_karaoke_server_url" value="{{ values['traditional_karaoke_server_url'] }}" placeholder="http://127.0.0.1:8888">
+      <label>Web Server Port</label>
+      <input name="web_server_port" value="{{ values['web_server_port'] }}" required>
+      <label>Ticker Upcoming Count</label>
+      <input name="ticker_upcoming_count" value="{{ values['ticker_upcoming_count'] }}" required>
+      <label><input type="checkbox" name="singer_rotation_on" {% if values['singer_rotation_on'] == '1' %}checked{% endif %}> Singer Rotation ON</label>
+      <button type="submit" name="settings_action" value="save">SAVE SETTINGS</button>
+      <button type="submit" name="settings_action" value="test_external">TEST EXTERNAL APPLICATION PATH</button>
+    </form>
+    <p><a href="{{ url_for('web.admin', token=token) }}">Back to Admin</a></p>
+  </main>
+</body>
+</html>
+

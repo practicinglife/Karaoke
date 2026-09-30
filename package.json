@@ -1,0 +1,21 @@
+{
+  "name": "karaoke-copilot-karaoke-ticker-app",
+  "version": "1.0.0",
+  "description": "Karaoke Ticker is a local Windows-first Flask + CustomTkinter application for running karaoke sessions with:",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "electron": "^44.4.5",
+    "express": "^5.2.1",
+    "react": "^19.3.0"
+  }
+}

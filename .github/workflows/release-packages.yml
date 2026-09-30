@@ -1,0 +1,70 @@
+name: release-packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version"
+        required: true
+        default: "1.0.0"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build Windows artifacts
+        shell: pwsh
+        run: .\scripts\release\build_windows.ps1 -Version "${{ github.event.inputs.version }}"
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: |
+            dist/KaraokeTicker.exe
+            dist/KaraokeTickerSetup.exe
+          if-no-files-found: warn
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Build macOS artifacts
+        run: bash ./scripts/release/build_macos.sh "${{ github.event.inputs.version }}"
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            dist/Karaoke Ticker.app
+            dist/release/KaraokeTicker-*.dmg
+          if-no-files-found: warn
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Linux packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fakeroot
+          python -m pip install fpm
+      - name: Build Linux artifacts
+        run: bash ./scripts/release/build_linux.sh "${{ github.event.inputs.version }}"
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          path: |
+            dist/release/*.AppImage
+            *.deb
+          if-no-files-found: warn

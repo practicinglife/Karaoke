@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Admin</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>Admin</h1>
+    <nav>
+      <a href="{{ url_for('web.settings_get', token=token) }}">Settings</a>
+      <a href="{{ url_for('web.ticker', token=ticker_token) }}">Ticker</a>
+      <a href="{{ url_for('web.player', token=token) }}">Web Player</a>
+    </nav>
+    <section class="card">
+      <h2>Now Playing</h2>
+      <p id="now-playing-text">
+        {% if now_playing %}
+        <strong>{{ now_playing.user.display_name }}</strong> — {{ now_playing.song.title }} / {{ now_playing.song.artist }}
+        {% else %}
+        No song marked as now playing.
+        {% endif %}
+      </p>
+      <button id="reopen-now-playing" data-action="play" {% if not now_playing %}style="display:none;"{% endif %}{% if now_playing %} data-id="{{ now_playing.id }}"{% endif %}>PLAY/OPEN AGAIN</button>
+      <button data-action="next">NEXT</button>
+      <button data-action="clear">CLEAR QUEUE</button>
+    </section>
+    <section class="card">
+      <h2>Up Next</h2>
+      <table id="queue-table">
+        <thead>
+          <tr><th>User</th><th>Song</th><th>Artist</th><th>Service</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          {% for item in waiting %}
+          <tr data-id="{{ item.id }}">
+            <td>{{ item.user.display_name }}</td>
+            <td>{{ item.song.title }}</td>
+            <td>{{ item.song.artist }}</td>
+            <td>{{ item.song.service }}</td>
+            <td>
+              <button data-action="play">PLAY/OPEN</button>
+              <button data-action="complete">MARK COMPLETE</button>
+              <button data-action="skip">SKIP</button>
+              <button data-action="remove">REMOVE</button>
+              <button data-action="up">MOVE UP</button>
+              <button data-action="down">MOVE DOWN</button>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    
+
+    <section class="card">
+      <h2>Admin User Modifications</h2>
+      <label>
+        <input type="checkbox" id="admin-user-mods-toggle">
+        Show user modifications
+      </label>
+      <div id="admin-user-mods-panel" class="admin-collapsible-panel" hidden>
+        <form method="post" action="{{ url_for('web.admin_user_rename', token=token) }}" style="margin-bottom:12px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>Singer</label>
+          <select name="user_id" required>
+            <option value="">Select singer</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.display_name }}</option>
+            {% endfor %}
+          </select>
+          <label>New Display Name</label>
+          <input name="display_name" maxlength="80" required>
+          <button type="submit">UPDATE SINGER NAME</button>
+        </form>
+
+        <form method="post" action="{{ url_for('web.admin_user_delete', token=token) }}" onsubmit="return confirm('Remove this singer and all saved songs?');" style="margin-bottom:12px;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>Singer</label>
+          <select name="user_id" required>
+            <option value="">Select singer</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.display_name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit">REMOVE SINGER</button>
+        </form>
+
+        <form method="post" action="{{ url_for('web.admin_user_bulk_add', token=token) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>Singer</label>
+          <select name="user_id" required>
+            <option value="">Select singer</option>
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.display_name }}</option>
+            {% endfor %}
+          </select>
+          <label>Default Platform (used when URL cannot be auto-detected)</label>
+          <select name="default_service">
+            <option value="youtube">YouTube</option>
+            <option value="apple_music">Apple Music</option>
+            <option value="spotify">Spotify</option>
+          </select>
+          <label>Bulk lines (one per song)</label>
+          <textarea name="bulk_lines" rows="7" maxlength="40000" placeholder="https://youtu.be/abc123 | Artist Name | Song Title"></textarea>
+          <p>Format: URL | Artist | Title (or URL,Artist,Title). Optional explicit service: youtube|apple_music|spotify|URL|Artist|Title</p>
+          <button type="submit">BULK ADD TO SINGER</button>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.KT_ADMIN = {
+      token: "{{ token }}",
+      csrfToken: "{{ csrf_token }}"
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>

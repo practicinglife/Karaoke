@@ -1,0 +1,329 @@
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #f5f5f5;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.card {
+  border: 1px solid #333;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  background: #1b1b1b;
+}
+
+label {
+  display: block;
+  margin-top: 0.5rem;
+}
+
+input,
+select,
+button {
+  width: 100%;
+  padding: 0.6rem;
+  margin-top: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid #444;
+  background: #222;
+  color: #f5f5f5;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin-top: 0;
+}
+
+button {
+  cursor: pointer;
+  width: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #333;
+  padding: 0.5rem;
+}
+
+#bulk-upload-toggle {
+  margin-top: 0.5rem;
+}
+
+.bulk-upload-panel {
+  margin-top: 0.75rem;
+  border-top: 1px solid #333;
+  padding-top: 0.75rem;
+}
+
+.admin-collapsible-panel {
+  margin-top: 0.75rem;
+  border-top: 1px solid #333;
+  padding-top: 0.75rem;
+}
+
+.song-tiles {
+  margin-top: 0.6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 0.6rem;
+}
+
+.song-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid #3a3a3a;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #222 0%, #1a1a1a 100%);
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px #1a1a1a;
+}
+
+.song-tile:focus-visible {
+  outline: 2px solid #7ec8ff;
+  outline-offset: 2px;
+}
+
+.song-tile-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.song-tile-artist {
+  opacity: 0.9;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-tile-service {
+  align-self: flex-start;
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid #4a4a4a;
+  background: #262626;
+  color: #e5e5e5;
+  text-transform: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-tile.queued-song {
+  border-color: #ff5c5c;
+  box-shadow: inset 0 0 0 1px rgba(255, 92, 92, 0.35), 0 0 0 2px rgba(255, 92, 92, 0.14);
+}
+
+.song-tile-badge {
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  border: 1px solid #ff5c5c;
+  background: rgba(255, 92, 92, 0.12);
+  color: #ffb3b3;
+}
+
+.song-delete-checkbox {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  display: none;
+}
+
+.song-tiles.delete-mode .song-delete-checkbox {
+  display: block;
+}
+
+.song-delete-checkbox:checked {
+  accent-color: #ff6b6b;
+}
+
+.song-tiles.delete-mode .song-tile.selected-delete {
+  border-color: #ff6b6b;
+  background: #2a1a1a;
+}
+
+a {
+  color: #7ec8ff;
+  margin-right: 0.8rem;
+}
+
+.success {
+  color: #88e188;
+}
+
+.error {
+  color: #ff9a9a;
+}
+
+.user-queue-notification {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 20;
+  margin: 0 0 1rem;
+  padding: 1rem 1.1rem;
+  border: 3px solid #1e90ff;
+  border-radius: 14px;
+  background: #000;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(30, 144, 255, 0.18), 0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: user-queue-notification-flash 0.8s steps(2, jump-none) infinite;
+}
+
+.user-queue-notification.up-next {
+  border-color: #ffd400;
+  color: #ffd400;
+}
+
+.user-queue-notification.up-now {
+  border-color: #ff3b30;
+  color: #ff3b30;
+}
+
+.user-queue-notification-title {
+  font-size: clamp(1.8rem, 6vw, 3rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.user-queue-notification-detail {
+  margin-top: 0.35rem;
+  font-size: clamp(0.95rem, 3.5vw, 1.2rem);
+  color: #f5f5f5;
+}
+
+@keyframes user-queue-notification-flash {
+  0%,
+  49% {
+    transform: scale(1);
+    opacity: 1;
+    background: #000;
+  }
+  50%,
+  100% {
+    transform: scale(1.02);
+    opacity: 0.9;
+    background: #111;
+  }
+}
+
+.player-shell {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.player-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.player-toolbar input {
+  width: 100%;
+}
+
+.player-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) 1fr;
+  gap: 1rem;
+}
+
+.player-library,
+.player-stage {
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #000;
+  padding: 0.35rem;
+}
+
+.player-library select {
+  width: 100%;
+  min-height: 280px;
+}
+
+.player-stage {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.player-stage canvas,
+.player-stage video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  min-height: 220px;
+  max-height: min(60vh, calc(100vh - 240px));
+  background: #000;
+  border-radius: 8px;
+  display: block;
+  object-fit: contain;
+}
+
+.player-stage canvas[hidden],
+.player-stage video[hidden] {
+  display: none !important;
+}
+
+.player-status {
+  margin-top: 0.25rem;
+  color: #7ec8ff;
+}
+
+.player-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.player-actions button {
+  width: 100%;
+}
+
+#karaoke-canvas:fullscreen,
+#video-player:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  object-fit: contain;
+  background: #000;
+}
+

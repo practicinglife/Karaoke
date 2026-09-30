@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Kiosk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>Kiosk Mode</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    {% endwith %}
+    <form method="post" action="{{ url_for('web.kiosk_submit') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label for="name">Display Name</label>
+      <input id="name" name="name" maxlength="80" required>
+      <button type="submit">ENTER KIOSK</button>
+    </form>
+  </main>
+  <script src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
+</body>
+</html>

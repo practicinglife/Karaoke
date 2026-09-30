@@ -1,0 +1,2 @@
+"""Karaoke Ticker core package."""
+

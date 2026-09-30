@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Web Player</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="container player-shell">
+          {% if not enabled %}
+    <p class="error">Web Player is disabled in Settings.</p>
+    {% endif %}
+
+    <section class="player-stage card">
+      <canvas id="karaoke-canvas" width="1280" height="720"></canvas>
+      <video id="video-player" preload="auto" playsinline hidden></video>
+      <audio id="audio-player" preload="auto" hidden></audio>
+      <div class="player-actions">
+        <button id="play-btn" type="button">Play</button>
+        <button id="pause-btn" type="button">Pause</button>
+        <button id="stop-btn" type="button">Stop</button>
+        <button id="fullscreen-btn" type="button">Full Screen</button>
+      </div>
+      <div class="player-status" id="player-status">{% if player_song %}Loading selected song...{% else %}No song selected.{% endif %}</div>
+    </section>
+  </main>
+  <script>
+    window.KT_PLAYER = { token: "{{ token }}", songId: {{ song_id if song_id is not none else 'null' }}, song: {{ player_song|tojson }} };
+  </script>
+  <script src="{{ url_for('static', filename='js/cdg.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/player.js') }}?v={{ asset_version }}"></script>
+</body>
+</html>

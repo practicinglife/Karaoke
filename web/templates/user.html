@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Guest</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <main class="container">
+    <h1>{{ user.display_name }}'s Songs</h1>
+    <p>House code: {{ house_code }}</p>
+    <div
+      id="user-queue-notification"
+      class="user-queue-notification"
+      data-user-name="{{ user.display_name }}"
+      data-phase="{{ queue_notification_state.phase }}"
+      data-song="{{ queue_notification_state.song }}"
+      data-artist="{{ queue_notification_state.artist }}"
+      aria-live="assertive"
+      aria-atomic="true"
+      hidden
+    >
+      <div class="user-queue-notification-title"></div>
+      <div class="user-queue-notification-detail"></div>
+    </div>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul>
+      {% for category, message in messages %}
+        <li class="{{ category }}">{{ message }}</li>
+      {% endfor %}
+      </ul>
+    {% endif %}
+    {% endwith %}
+
+    <section class="card">
+      <h2>Add Song</h2>
+      <form method="post" action="{{ url_for('web.add_song') }}" id="add-song-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label>Song Title</label>
+        <input id="song-title" name="title" maxlength="255" required>
+        <label>Artist</label>
+        <input id="song-artist" name="artist" maxlength="255" required>
+        <label>Service</label>
+        <select name="service" id="service-selector" required>
+          <option value="traditional">TRADITIONAL KARAOKE</option>
+          <option value="youtube">YOUTUBE</option>
+          <option value="apple_music">APPLE MUSIC</option>
+          <option value="spotify">SPOTIFY</option>
+        </select>
+        <div id="url-row" style="display:none;">
+          <label id="url-label">Link</label>
+          <input name="url" id="url-input" maxlength="600">
+        </div>
+        <div id="traditional-row">
+          <label>Search indexed karaoke library</label>
+          <input id="traditional-search" placeholder="Type to search title/artist">
+          <input type="hidden" name="karaoke_library_id" id="karaoke-library-id">
+          <ul id="search-results"></ul>
+          <div id="search-pagination" style="display:none; margin-top:8px;">
+            <button type="button" id="search-prev">PREV</button>
+            <span id="search-page-label" style="margin:0 10px;"></span>
+            <button type="button" id="search-next">NEXT</button>
+          </div>
+        </div>
+        <button type="submit">SAVE SONG</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Saved Songs</h2>
+      <p>Tap/click a tile to add that song to queue. Tap it again while queued to remove it.</p>
+      <label>
+        <input type="checkbox" id="delete-mode-toggle">
+        Delete mode
+      </label>
+      <form method="post" action="{{ url_for('web.delete_song_bulk_route') }}" id="bulk-delete-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="song-tiles" id="song-tiles">
+          {% for song in songs %}
+          <div
+            class="song-tile{% if song.id in queued_song_ids %} queued-song{% endif %}"
+            data-song-id="{{ song.id }}"
+            data-queue-url="{{ url_for('web.queue_add', song_id=song.id) }}"
+            tabindex="0"
+            role="button"
+            aria-label="{{ song.title }} by {{ song.artist }}{% if song.id in queued_song_ids %}, queued tonight, click again to remove from queue{% endif %}"
+          >
+            <input class="song-delete-checkbox" type="checkbox" name="song_ids" value="{{ song.id }}" aria-label="Select {{ song.title }} for delete">
+            <div class="song-tile-title">{{ song.title }}</div>
+            <div class="song-tile-artist">{{ song.artist }}</div>
+            <div class="song-tile-service">
+              {% if song.service == 'apple_music' %}Apple Music{% elif song.service == 'youtube' %}YouTube{% elif song.service == 'spotify' %}Spotify{% elif song.service == 'traditional' %}Traditional{% else %}{{ song.service }}{% endif %}
+            </div>
+            <div class="song-tile-badge" {% if song.id not in queued_song_ids %}hidden{% endif %}>Queued tonight</div>
+          </div>
+          {% endfor %}
+        </div>
+        <button type="submit" id="delete-selected-btn" disabled>DELETE SELECTED</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Bulk Upload Songs (YouTube / Apple Music / Spotify)</h2>
+      <button type="button" id="bulk-upload-toggle" aria-expanded="false">SHOW BULK UPLOAD</button>
+      <div id="bulk-upload-panel" class="bulk-upload-panel" hidden>
+        <p>Paste multiple songs at once. One line per song:</p>
+        <p><strong>URL | Artist | Title</strong> or <strong>URL,Artist,Title</strong></p>
+        <p>You can also paste only a URL and the app will try to auto-fill title + artist.</p>
+        <form method="post" action="{{ url_for('web.bulk_add_songs') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label>Default Platform (used when URL cannot be auto-detected)</label>
+          <select name="default_service">
+            <option value="youtube">YouTube</option>
+            <option value="apple_music">Apple Music</option>
+            <option value="spotify">Spotify</option>
+          </select>
+          <label>Bulk Lines</label>
+          <textarea name="bulk_lines" rows="10" maxlength="40000" placeholder="https://youtu.be/abc123"></textarea>
+          <button type="submit">BULK UPLOAD TO MY LIST</button>
+        </form>
+      </div>
+    </section>
+
+    <input type="hidden" id="user-csrf-token" value="{{ csrf_token }}">
+  </main>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='js/user.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/user-notifications.js') }}"></script>
+</body>
+</html>
+
