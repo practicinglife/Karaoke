@@ -22,6 +22,30 @@ Karaoke Ticker manages a karaoke night with:
 - optional Kanto launch for local karaoke files
 - in-page guest notifications such as **UP NEXT!!** and **UP NOW!!**
 
+## Screenshots
+
+### Admin
+![Admin Page](docs/screenshots/01-admin-page.png)
+
+### Ticker / Live Queue
+![Ticker Live Queue](docs/screenshots/02-ticker-live-queue.png)
+
+### User Bulk Upload
+![User Bulk Upload](docs/screenshots/03-user-bulk-upload.png)
+
+### Up Next / Singing Now
+![Up Next Singing Now 1](docs/screenshots/04-up-next-now-singing.png)
+![Up Next Singing Now 2](docs/screenshots/05-up-next-now-singing.png)
+
+### Add to Queue
+![Add to Queue](docs/screenshots/06-AddtoQueue.png)
+
+### House Session Join
+![House Session Join](docs/screenshots/07-house-session-join.png)
+
+### Player Fullscreen
+![Player Fullscreen](docs/screenshots/08-player-fullscreen.png)
+
 ## Current Runtime Model
 
 The application has two main entry modes:
