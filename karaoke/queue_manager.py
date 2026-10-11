@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections import deque
-from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from .models import QueueItem, SessionRecord
+from .utils import utcnow
 
 WAITING = "WAITING"
 NOW_PLAYING = "NOW_PLAYING"
@@ -43,7 +43,7 @@ class QueueManager:
             song_id=song_id,
             status=WAITING,
             queue_position=next_position + 1,
-            added_at=datetime.utcnow(),
+            added_at=utcnow(),
         )
         self.db_session.add(item)
         self.db_session.flush()

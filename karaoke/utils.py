@@ -6,8 +6,14 @@ import random
 import re
 import socket
 import string
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Tuple
+
+
+def utcnow() -> datetime:
+    """Current UTC time as a naive datetime (replaces deprecated datetime.utcnow)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def normalize_text(value: str) -> str:

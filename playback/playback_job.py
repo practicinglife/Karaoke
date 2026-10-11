@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from karaoke.utils import utcnow
+
 from .playback_state import PlaybackState
 
 if TYPE_CHECKING:
@@ -40,17 +42,17 @@ class PlaybackJob:
 
     def begin(self) -> None:
         """Mark playback job as started."""
-        self.start_time = datetime.utcnow()
+        self.start_time = utcnow()
         self.status = PlaybackState.PREPARING
 
     def finish(self) -> None:
         """Mark playback job as finished."""
-        self.end_time = datetime.utcnow()
+        self.end_time = utcnow()
         self.status = PlaybackState.FINISHED
 
     def fail(self, reason: str) -> None:
         """Mark playback job as failed with reason."""
-        self.end_time = datetime.utcnow()
+        self.end_time = utcnow()
         self.error = reason
         self.status = PlaybackState.FAILED
 

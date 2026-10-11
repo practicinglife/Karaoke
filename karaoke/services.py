@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .models import KaraokeLibrary, SessionRecord, Setting, Song, User
-from .utils import generate_house_code
+from .utils import generate_house_code, utcnow
 from .validators import (
     is_valid_apple_music_url,
     is_valid_spotify_url,
@@ -261,7 +260,7 @@ def create_session(session: Session, house_name: str | None = None) -> SessionRe
     )
     if running:
         running.status = "STOPPED"
-        running.ended_at = datetime.utcnow()
+        running.ended_at = utcnow()
 
     house_code = generate_house_code()
     while session.scalar(select(SessionRecord).where(SessionRecord.house_code == house_code)):
@@ -285,7 +284,7 @@ def stop_session(session: Session, session_id: int) -> SessionRecord:
     if not record:
         raise ValueError("Session not found.")
     record.status = "STOPPED"
-    record.ended_at = datetime.utcnow()
+    record.ended_at = utcnow()
     session.flush()
     return record
 

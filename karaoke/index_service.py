@@ -19,6 +19,7 @@ from config import DATA_DIR
 
 from .library_indexer import SUPPORTED_EXTENSIONS, build_index, build_index_from_manifest
 from .services import active_session, get_setting
+from .utils import utcnow
 
 
 class BackgroundIndexer:
@@ -135,7 +136,7 @@ class BackgroundIndexer:
         self._set_progress(1.0, f"Scan complete ({len(files)} files)")
         return {
             "root": karaoke_root,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utcnow().isoformat(),
             "files": files,
             "file_names": file_names,
             "file_count": len(files),
@@ -194,7 +195,7 @@ class BackgroundIndexer:
 
         return {
             "root": manifest_path,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": utcnow().isoformat(),
             "files": files,
             "file_names": sorted(file_names),
             "file_count": len(files),

@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
+from .utils import utcnow
 
 
 class User(Base):
@@ -17,7 +18,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     display_name: Mapped[str] = mapped_column(String(80), nullable=False)
     normalized_name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     songs: Mapped[list["Song"]] = relationship("Song", back_populates="user", cascade="all, delete-orphan")
     queue_items: Mapped[list["QueueItem"]] = relationship("QueueItem", back_populates="user")
@@ -59,7 +60,7 @@ class Song(Base):
     karaoke_library_id: Mapped[int] = mapped_column(
         ForeignKey("karaoke_library.id"), nullable=True
     )
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
     user: Mapped[User] = relationship("User", back_populates="songs")
     karaoke_library: Mapped[KaraokeLibrary] = relationship("KaraokeLibrary", back_populates="songs")
@@ -74,7 +75,7 @@ class SessionRecord(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     house_code: Mapped[str] = mapped_column(String(6), nullable=False, unique=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="RUNNING")
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     ended_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     house_name: Mapped[str] = mapped_column(String(100), nullable=False, default="Karaoke Ticker")
     admin_token: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -93,9 +94,9 @@ class QueueItem(Base):
     song_id: Mapped[int] = mapped_column(ForeignKey("songs.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="WAITING")
     queue_position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
     )
 
     session: Mapped[SessionRecord] = relationship("SessionRecord", back_populates="queue_items")
@@ -120,4 +121,4 @@ class EventLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     level: Mapped[str] = mapped_column(String(20), nullable=False, default="INFO")
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
