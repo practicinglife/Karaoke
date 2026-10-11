@@ -67,14 +67,28 @@ from karaoke.validators import (
     validate_song_title,
 )
 from karaoke.utils import is_path_under
+from stage import create_stage_controller
+from stage.controller import EXPIRY_ACTIONS, IDLE
+from stage.monitors import describe_monitors
+from stage.plans import stage_service_for
 
 logger = logging.getLogger(__name__)
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".wmv"}
+TEACHABLE_SERVICES = {"youtube", "youtube_music", "spotify", "apple_music"}
+FILLER_EXTENSIONS = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"}
+MAX_FILLER_TRACKS = 2000
 
 
 def register_routes(app, runtime_state, socketio: SocketIO) -> None:
     """Register all routes."""
     bp = Blueprint("web", __name__)
+
+    if runtime_state.stage is None:
+        runtime_state.stage = create_stage_controller(
+            runtime_state.db,
+            emit=lambda event, payload: socketio.emit(event, payload),
+            emit_queue=lambda: emit_queue_update(),
+        )
 
     def ensure_csrf() -> str:
         token = flask_session.get("csrf_token")
@@ -693,6 +707,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     now_playing,
                     ordered_up_next,
                 ),
+                stage_state=runtime_state.stage.snapshot(),
             )
 
     @bp.post("/user/rename")
@@ -1037,6 +1052,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             enabled=enabled,
             song_id=int(song_id) if song_id.isdigit() else None,
             player_song=player_song,
+            autoplay=request.args.get("autoplay") == "1",
             asset_version=secrets.token_hex(8),
         )
 
@@ -1117,8 +1133,11 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             now_playing = qm.now_playing(record.id)
             waiting = qm.ordered_up_next(record.id, settings["rotation"])
             users = list_users(db)
+            stage_monitor = get_setting(db, "stage_monitor")
             return render_template(
                 "admin.html",
+                monitors=describe_monitors(),
+                stage_monitor=stage_monitor,
                 now_playing=now_playing,
                 waiting=waiting,
                 users=users,
@@ -1333,6 +1352,9 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
         admin_record = require_admin()
         action = request.form.get("action", "")
         queue_item_id = request.form.get("queue_item_id", "").strip()
+        stage = runtime_state.stage
+        stage_item_id: int | None = None
+        stage_next = False
         with runtime_state.db.session_scope() as db:
             record = active_session(db)
             if not record:
@@ -1341,8 +1363,12 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             rotation = get_setting(db, "singer_rotation_on") == "1"
             playback_mode = get_playback_mode(db)
             external_app_path = get_external_application_path(db)
+            stage_enabled = get_setting(db, "stage_enabled") == "1"
             if action == "next":
-                qm.next_song(record.id, rotation)
+                if stage_enabled and stage.state != IDLE:
+                    stage_next = True
+                else:
+                    qm.next_song(record.id, rotation)
             elif action == "clear":
                 qm.clear_queue(record.id)
             else:
@@ -1358,8 +1384,15 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                         return jsonify({"ok": False, "message": "Missing song"}), 404
                     from karaoke.launcher import launch_traditional_song, launch_url
 
+                    stage_service = stage_service_for(song.service, song.url)
+                    if stage_enabled and stage_service and (
+                        stage_service != "traditional" or playback_mode == "built_in"
+                    ):
+                        stage_item_id = item_id
                     try:
-                        if song.service == "traditional":
+                        if stage_item_id is not None:
+                            pass  # started on the stage screen below, after this session closes
+                        elif song.service == "traditional":
                             library_entry = song.karaoke_library
                             if not library_entry:
                                 _ensure_traditional_library_index(db)
@@ -1393,7 +1426,8 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                                 return jsonify({"ok": False, "message": "Missing URL"}), 404
                             launch_url(song.url)
 
-                        qm.mark_now_playing(item_id)
+                        if stage_item_id is None:
+                            qm.mark_now_playing(item_id)
                     except Exception as exc:
                         logger.exception("Failed to launch song: %s", exc)
                         return jsonify({"ok": False, "message": "Failed to launch selected item."}), 400
@@ -1409,8 +1443,124 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     qm.move_item(item_id, "down", rotation)
                 else:
                     return jsonify({"ok": False, "message": "Unsupported action"}), 400
+        if stage_item_id is not None:
+            stage.set_base_url(request.host_url)
+            ok, message = stage.start_item(stage_item_id)
+            if not ok:
+                return jsonify({"ok": False, "message": message}), 400
+        elif stage_next:
+            stage.song_finished()
         emit_queue_update()
         return jsonify({"ok": True})
+
+    # ----- Stage automation ---------------------------------------------------------
+
+    def _filler_tracks() -> tuple[Path | None, list[Path]]:
+        with runtime_state.db.session_scope() as db:
+            folder = str(get_setting(db, "intermission_folder") or "").strip()
+        if not folder or not Path(folder).is_dir():
+            return None, []
+        root = Path(folder)
+        tracks = sorted(
+            path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in FILLER_EXTENSIONS
+        )
+        return root, tracks[:MAX_FILLER_TRACKS]
+
+    @bp.get("/stage")
+    def stage_page() -> str:
+        record = require_admin()
+        with runtime_state.db.session_scope() as db:
+            house_name = get_setting(db, "house_name") or "Karaoke Ticker"
+        return render_template(
+            "stage.html",
+            token=record.admin_token,
+            house_name=house_name,
+            house_code=record.house_code,
+            stage_state=runtime_state.stage.snapshot(),
+        )
+
+    @bp.get("/api/stage")
+    def api_stage() -> Response:
+        _ = require_admin()
+        return jsonify(runtime_state.stage.snapshot())
+
+    @bp.post("/admin/stage")
+    def admin_stage() -> Response:
+        verify_csrf()
+        _ = require_admin()
+        stage = runtime_state.stage
+        action = request.form.get("action", "")
+        stage.set_base_url(request.host_url)
+        if action == "open":
+            stage.open()
+        elif action == "close":
+            stage.close()
+        elif action == "move":
+            monitor = request.form.get("monitor", "").strip()
+            if not monitor.isdigit() or not (1 <= int(monitor) <= 9):
+                return jsonify({"ok": False, "message": "Pick a screen."}), 400
+            stage.move_to_monitor(int(monitor))
+        elif action == "start_next":
+            ok, message = stage.singer_ready("host")
+            if not ok:
+                return jsonify({"ok": False, "message": message}), 400
+        elif action == "teach_start":
+            service = request.form.get("service", "")
+            url = request.form.get("url", "").strip()
+            if service not in TEACHABLE_SERVICES:
+                return jsonify({"ok": False, "message": "Pick a service to teach."}), 400
+            if not url.startswith("https://"):
+                return jsonify({"ok": False, "message": "Paste a song link (https://...) for that service."}), 400
+            stage.teach_start(service, url)
+        elif action in {"teach_save", "teach_cancel"}:
+            steps = stage.teach_finish(save=action == "teach_save")
+            return jsonify({"ok": True, "saved_steps": len(steps) if action == "teach_save" else 0, "stage": stage.snapshot()})
+        elif action == "teach_reset":
+            service = request.form.get("service", "")
+            if service not in TEACHABLE_SERVICES:
+                return jsonify({"ok": False, "message": "Pick a service."}), 400
+            stage.teach_reset(service)
+        elif action == "test_selectors":
+            try:
+                return jsonify({"ok": True, "report": stage.test_selectors()})
+            except Exception as exc:
+                return jsonify({"ok": False, "message": f"Selector test failed: {exc}"}), 400
+        else:
+            return jsonify({"ok": False, "message": "Unsupported stage action"}), 400
+        return jsonify({"ok": True, "stage": stage.snapshot()})
+
+    @bp.get("/stage/filler")
+    def stage_filler_list() -> Response:
+        _ = require_admin()
+        _, tracks = _filler_tracks()
+        return jsonify({"count": len(tracks)})
+
+    @bp.get("/stage/filler/<int:index>")
+    def stage_filler_track(index: int) -> Response:
+        _ = require_admin()
+        root, tracks = _filler_tracks()
+        if root is None or not (0 <= index < len(tracks)) or not is_path_under(root, tracks[index]):
+            abort(404)
+        guessed, _ = mimetypes.guess_type(str(tracks[index]))
+        return send_file(tracks[index], mimetype=guessed or "audio/mpeg", conditional=True)
+
+    @bp.post("/stage/ready")
+    def stage_ready_guest() -> Response:
+        verify_csrf()
+        user_id, _ = require_guest_session()
+        ok, message = runtime_state.stage.singer_ready("phone", user_id=user_id)
+        return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
+
+    @bp.route("/api/stage/ready", methods=["GET", "POST"])
+    def stage_ready_button() -> Response:
+        """Network ready button (Flic, ESP32, smart button): ?key=<stage_button_secret>."""
+        key = request.args.get("key") or request.form.get("key") or ""
+        with runtime_state.db.session_scope() as db:
+            secret = get_setting(db, "stage_button_secret")
+        if not secret or not secrets.compare_digest(key, secret):
+            abort(403, "Invalid button key.")
+        ok, message = runtime_state.stage.singer_ready("network")
+        return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
 
     @bp.get("/settings")
     def settings_get() -> str:
@@ -1426,10 +1576,25 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     "ticker_upcoming_count",
                     "singer_rotation_on",
                     "house_name",
+                    "stage_enabled",
+                    "stage_monitor",
+                    "stage_fullscreen",
+                    "intermission_folder",
+                    "countdown_seconds",
+                    "countdown_expiry_action",
+                    "ready_hotkey",
                 )
             }
             values["playback_mode"] = get_playback_mode(db)
-        return render_template("settings.html", values=values, token=record.admin_token, csrf_token=ensure_csrf())
+            button_key = get_setting(db, "stage_button_secret")
+        return render_template(
+            "settings.html",
+            values=values,
+            token=record.admin_token,
+            csrf_token=ensure_csrf(),
+            monitors=describe_monitors(),
+            stage_button_url=f"{request.host_url.rstrip('/')}{url_for('web.stage_ready_button', key=button_key)}",
+        )
 
     @bp.post("/settings")
     def settings_post() -> Response:
@@ -1458,6 +1623,23 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             rotation = "1" if request.form.get("singer_rotation_on") == "on" else "0"
             set_setting(db, "singer_rotation_on", rotation)
             set_setting(db, "house_name", request.form.get("house_name", "Karaoke Ticker").strip()[:100])
+
+            stage_monitor = request.form.get("stage_monitor", "2").strip()
+            countdown = request.form.get("countdown_seconds", "60").strip()
+            if not stage_monitor.isdigit() or not (1 <= int(stage_monitor) <= 9):
+                flash("Stage monitor must be 1-9", "error")
+                return redirect(url_for("web.settings_get", token=record.admin_token))
+            if not countdown.isdigit() or not (5 <= int(countdown) <= 600):
+                flash("Countdown must be 5-600 seconds", "error")
+                return redirect(url_for("web.settings_get", token=record.admin_token))
+            expiry = request.form.get("countdown_expiry_action", "wait")
+            set_setting(db, "stage_enabled", "1" if request.form.get("stage_enabled") == "on" else "0")
+            set_setting(db, "stage_monitor", stage_monitor)
+            set_setting(db, "stage_fullscreen", "1" if request.form.get("stage_fullscreen") == "on" else "0")
+            set_setting(db, "intermission_folder", request.form.get("intermission_folder", "").strip())
+            set_setting(db, "countdown_seconds", countdown)
+            set_setting(db, "countdown_expiry_action", expiry if expiry in EXPIRY_ACTIONS else "wait")
+            set_setting(db, "ready_hotkey", request.form.get("ready_hotkey", "").strip().lower()[:40])
 
             if playback_mode == "external_application":
                 is_valid_path, error_message = _validate_external_application_path(external_path)

@@ -1,0 +1,68 @@
+{
+  "_help": [
+    "How the stage browser drives each service. Edit this file when a site changes its layout - no code change needed.",
+    "Each service runs its 'steps' in order after the song page loads.",
+    "Selectors are Playwright selectors (CSS, or role=button[name=/lyrics/i]); the first visible match in each list is used.",
+    "Step types: click (optionally only 'when': 'paused'), press (a key, optionally after focusing an element), wait_playing (ms), wait (ms).",
+    "'unless' skips a step when the player is already fullscreen (fullscreen buttons and keys toggle): a CSS selector that matches only in fullscreen, or 'fullscreen' for any element other than the whole page.",
+    "'optional': true means a missing button is not an error. 'busy' selectors mark an ad/interstitial so its end is not treated as the song ending.",
+    "'watch_clicks' are clicked whenever they appear during playback (skip-ad buttons, 'still watching?' prompts).",
+    "Use 'Test selectors' on the admin page while a song is on the stage screen to see which selectors currently match."
+  ],
+  "youtube": {
+    "hosts": ["www.youtube.com", "youtube.com", "m.youtube.com", "youtu.be"],
+    "busy": ["#movie_player.ad-showing"],
+    "watch_clicks": [".ytp-skip-ad-button", ".ytp-ad-skip-button-modern", ".ytp-ad-skip-button"],
+    "steps": [
+      {"wait_playing": 6000},
+      {"click": ["button.ytp-large-play-button", "button.ytp-play-button"], "when": "paused", "optional": true, "timeout": 4000},
+      {"click": ["button.ytp-fullscreen-button"], "unless": "#movie_player.ytp-fullscreen", "optional": true, "timeout": 3000},
+      {"press": "f", "focus": ["#movie_player"], "unless": "#movie_player.ytp-fullscreen", "optional": true}
+    ]
+  },
+  "youtube_music": {
+    "hosts": ["music.youtube.com"],
+    "busy": [],
+    "watch_clicks": [],
+    "steps": [
+      {"wait_playing": 6000},
+      {"click": ["#play-pause-button", "ytmusic-play-button-renderer"], "when": "paused", "optional": true, "timeout": 4000},
+      {"click": ["tp-yt-paper-tab:has-text('Lyrics')", "role=tab[name=/lyrics/i]"], "optional": true, "timeout": 6000},
+      {"press": "f", "unless": "ytmusic-player[player-ui-state='FULLSCREEN']", "optional": true}
+    ]
+  },
+  "spotify": {
+    "hosts": ["open.spotify.com"],
+    "busy": [],
+    "watch_clicks": [],
+    "steps": [
+      {"wait_playing": 5000},
+      {"click": ["[data-testid='action-bar-row'] [data-testid='play-button']", "[data-testid='control-button-playpause']"], "when": "paused", "optional": true, "timeout": 8000},
+      {"wait_playing": 8000},
+      {"click": ["[data-testid='lyrics-button']", "role=button[name=/lyrics/i]"], "optional": true, "timeout": 6000},
+      {"click": ["[data-testid='fullscreen-mode-button']", "role=button[name=/full screen/i]"], "unless": "fullscreen", "optional": true, "timeout": 4000}
+    ]
+  },
+  "apple_music": {
+    "hosts": ["music.apple.com"],
+    "busy": [],
+    "watch_clicks": [],
+    "steps": [
+      {"wait_playing": 4000},
+      {"click": ["button[data-testid='click-action'][aria-label='Play']", "button.play-button", "role=button[name='Play']"], "when": "paused", "optional": true, "timeout": 10000},
+      {"wait_playing": 10000},
+      {"click": ["button[data-testid='lyrics-button']", "button.lyrics-button", "role=button[name=/lyrics/i]"], "optional": true, "timeout": 6000},
+      {"click": ["button[data-testid='lyrics-fullscreen-button']", "role=button[name=/full ?screen|expand|maximi[sz]e/i]"], "unless": "fullscreen", "optional": true, "timeout": 4000}
+    ]
+  },
+  "traditional": {
+    "hosts": [],
+    "busy": [],
+    "watch_clicks": [],
+    "steps": [
+      {"wait_playing": 8000},
+      {"click": ["#play-btn"], "when": "paused", "optional": true, "timeout": 4000},
+      {"click": ["#fullscreen-btn"], "unless": "canvas:fullscreen, video:fullscreen", "optional": true, "timeout": 4000}
+    ]
+  }
+}

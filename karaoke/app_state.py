@@ -24,6 +24,8 @@ class RuntimeState:
     ticker_qr_path: str = ""
     # Background indexer instance (set at runtime); typed as object to avoid import cycles
     indexer: object | None = None
+    # Stage automation controller (stage.StageController), created by register_routes
+    stage: object | None = None
     index_status: str = "Idle"
     index_compare_summary: str = "No snapshot yet"
     index_last_run: str = "Never"

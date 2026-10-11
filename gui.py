@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 import os
+import json
+import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 import webbrowser
 from datetime import datetime, timezone
@@ -13,7 +15,8 @@ import customtkinter as ctk
 import qrcode
 
 from app import create_app, create_runtime_state, start_server_thread
-from config import AppConfig
+from config import DATA_DIR, AppConfig
+from karaoke import backup as user_backup
 from karaoke.services import (
     active_session,
     create_session,
@@ -90,8 +93,12 @@ class KaraokeTickerGUI(ctk.CTk):
             ("OPEN KIOSK", self.open_kiosk),
             ("OPEN ADMIN", self.open_admin),
             ("OPEN TICKER", self.open_ticker),
+            ("OPEN STAGE", self.open_stage),
+            ("CLOSE STAGE", self.close_stage),
             ("REFRESH KARAOKE LIBRARY", self.refresh_library),
             ("COMPARE LIBRARY SNAPSHOT", self.compare_library_snapshot),
+            ("BACKUP USER DATA", self.backup_user_data),
+            ("IMPORT USER DATA", self.import_user_data),
             ("SETTINGS", self.open_settings_dialog),
             ("EXIT", self.destroy),
         ]
@@ -169,6 +176,7 @@ class KaraokeTickerGUI(ctk.CTk):
                 messagebox.showinfo("Stop House", "No active house session.")
                 return
             stop_session(db, record.id)
+        self.runtime_state.stage.close()
         self._refresh_state()
         messagebox.showinfo("House Stopped", "Session stopped. Users and songs were preserved.")
 
@@ -254,6 +262,64 @@ class KaraokeTickerGUI(ctk.CTk):
             webbrowser.open(ticker_url)
         except Exception as exc:
             messagebox.showwarning("Ticker", str(exc))
+
+    def open_stage(self) -> None:
+        try:
+            with self.runtime_state.db.session_scope() as db:
+                if not active_session(db):
+                    raise RuntimeError("Start the house first.")
+                port = int(get_setting(db, "web_server_port") or "8080")
+            self._ensure_server_running(port)
+            stage = self.runtime_state.stage
+            stage.set_base_url(f"http://127.0.0.1:{port}")
+            stage.open()
+        except Exception as exc:
+            messagebox.showwarning("Stage", str(exc))
+
+    def close_stage(self) -> None:
+        self.runtime_state.stage.close()
+
+    def backup_user_data(self) -> None:
+        try:
+            folder = user_backup.backup_user_data(
+                self.runtime_state.db, self.config_obj.database_url, Path(DATA_DIR) / "backups"
+            )
+        except Exception as exc:
+            logger.exception("Backup failed")
+            messagebox.showerror("Backup", f"Backup failed: {exc}")
+            return
+        messagebox.showinfo(
+            "Backup",
+            f"Saved singers, songs and the full database to:
+{folder}
+
+"
+            f"Use IMPORT USER DATA with {user_backup.JSON_NAME} to load the singers and songs into another copy of the app.",
+        )
+        try:
+            os.startfile(folder)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def import_user_data(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Choose a user data backup",
+            initialdir=str(Path(DATA_DIR) / "backups"),
+            filetypes=[("Karaoke Ticker backup", user_backup.JSON_NAME), ("JSON", "*.json")],
+        )
+        if not path:
+            return
+        try:
+            payload = json.loads(Path(path).read_text(encoding="utf-8"))
+            with self.runtime_state.db.session_scope() as db:
+                result = user_backup.import_user_data(db, payload)
+        except Exception as exc:
+            logger.exception("Import failed")
+            messagebox.showerror("Import", f"Import failed: {exc}")
+            return
+        messagebox.showinfo("Import", "Nothing was deleted or changed.
+
+" + result.summary())
 
     def refresh_library(self) -> None:
         # Request a background re-index. Indexer will skip indexing while a house session is running.

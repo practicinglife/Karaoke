@@ -327,3 +327,36 @@ a {
   background: #000;
 }
 
+
+.stage-ready-btn {
+  position: sticky;
+  top: 0.75rem;
+  z-index: 21;
+  margin: 0 0 1rem;
+  padding: 1.4rem 1rem;
+  font-size: clamp(1.6rem, 7vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border: 3px solid #2ecc40;
+  border-radius: 14px;
+  background: #2ecc40;
+  color: #000;
+}
+
+.stage-ready-btn:disabled {
+  opacity: 0.6;
+}
+
+.stage-status {
+  font-size: 1.1rem;
+}
+
+.stage-report {
+  white-space: pre-wrap;
+  font-size: 0.85rem;
+  max-height: 320px;
+  overflow: auto;
+  background: #000;
+  padding: 0.6rem;
+  border-radius: 6px;
+}

@@ -26,7 +26,7 @@
     </section>
   </main>
   <script>
-    window.KT_PLAYER = { token: "{{ token }}", songId: {{ song_id if song_id is not none else 'null' }}, song: {{ player_song|tojson }} };
+    window.KT_PLAYER = { token: "{{ token }}", songId: {{ song_id if song_id is not none else 'null' }}, song: {{ player_song|tojson }}, autoplay: {{ 'true' if autoplay else 'false' }} };
   </script>
   <script src="{{ url_for('static', filename='js/cdg.js') }}"></script>
   <script src="{{ url_for('static', filename='js/player.js') }}?v={{ asset_version }}"></script>

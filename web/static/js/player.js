@@ -231,7 +231,15 @@ stopBtn.addEventListener("click", () => stopPlayback());
 updateMediaMode(activeSong);
 drawIdleScreen("Web Player", "Open a song from Admin.", activeSong ? "Loading lyrics..." : "Waiting for track");
 if (activeSong) {
-  renderSelection(activeSong).catch(() => setStatus("Unable to load the selected song."));
+  renderSelection(activeSong)
+    .then(() => {
+      // Stage screen opens the player with ?autoplay=1 (browser launched with autoplay allowed).
+      if (window.KT_PLAYER?.autoplay) {
+        return startPlayback();
+      }
+      return undefined;
+    })
+    .catch(() => setStatus("Unable to load the selected song."));
 } else {
   trackNeedsReload = true;
   showReadySongState(null);

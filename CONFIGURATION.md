@@ -26,3 +26,41 @@ Configured from Settings page or persisted in `settings` table.
 - Configure karaoke folder.
 - Run **Refresh Karaoke Library** in GUI.
 - CDG+MP3 pairing is indexed as a single traditional track entry.
+
+## Stage Screen
+A dedicated Edge window (started normally, then controlled over its DevTools port) on the audience screen that plays
+YouTube, YouTube Music, Spotify, Apple Music and built-in traditional karaoke songs,
+pressing play / lyrics / fullscreen for you. Between songs it shows the next singer
+with a countdown and intermission music until that singer presses **ready**.
+
+Settings (Settings page → Stage Screen):
+
+- `stage_enabled` — route PLAY through the stage screen
+- `stage_monitor` — which screen the window opens on (dropdown of detected screens; MOVE STAGE TO THIS SCREEN on the admin page moves an open window)
+- `stage_fullscreen` — open the window full screen
+- `intermission_folder` — music played between songs (mp3, m4a, aac, wav, ogg, flac)
+- `countdown_seconds` — countdown shown for the next singer
+- `countdown_expiry_action` — `wait` (keep waiting), `start` (start anyway), `bump` (move them down one)
+- `ready_hotkey` — key sent by a mic-stand button (foot pedal, presenter clicker, Bluetooth remote)
+- `stage_button_secret` — key in the network button URL shown on the Settings page
+
+Ready triggers: START MY SONG on the singer's phone, the ready hotkey, the network
+button URL (`/api/stage/ready?key=...`, GET or POST), or START NEXT SINGER NOW on the admin page.
+
+First-time setup:
+
+1. `pip install -r requirements.txt` (Playwright uses the installed Microsoft Edge; no browser download needed).
+2. Start the house, click **OPEN STAGE**, and sign in to Apple Music, Spotify and YouTube
+   in that window once. Sign-ins are kept in `data/stage-profile/`. Press F11 to leave full screen while signing in.
+
+### Teach mode (recommended for Apple Music and Spotify)
+On the admin page, under **Teach a service**, pick the service, paste a song link and click
+**START TEACHING**. The stage window opens that song on the main screen; do exactly what you
+would do by hand (play, lyrics, maximize, full screen). Each click is recorded with several
+ways to find that button again; clicks that start playback are only repeated when the song is
+paused, and clicks that go full screen are skipped when it already is. Click **SAVE WHAT I DID**.
+Taught steps are stored in `data/stage_selectors.json` and override the built-in ones in
+`stage/selectors.json`; **USE BUILT-IN STEPS FOR THIS SERVICE** removes them.
+
+With a song on the stage screen, **TEST SELECTORS ON CURRENT SONG PAGE** shows which buttons
+the app can currently find.

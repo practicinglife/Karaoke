@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Karaoke Ticker - Stage</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/stage.css') }}">
+</head>
+<body>
+  <header class="stage-header">
+    <span class="stage-house">{{ house_name }}</span>
+    <span class="stage-code">House code <strong>{{ house_code }}</strong></span>
+  </header>
+
+  <main class="stage-main">
+    <section id="stage-up" class="stage-up" hidden>
+      <div class="stage-label">UP NEXT</div>
+      <div id="stage-singer" class="stage-singer"></div>
+      <div id="stage-song" class="stage-song"></div>
+      <div id="stage-countdown" class="stage-countdown" hidden></div>
+      <div id="stage-prompt" class="stage-prompt">Press the button at the mic, or tap <strong>START MY SONG</strong> on your phone</div>
+    </section>
+
+    <section id="stage-empty" class="stage-empty" hidden>
+      <div class="stage-label">THE QUEUE IS EMPTY</div>
+      <div class="stage-song">Join with house code <strong>{{ house_code }}</strong> to add a song</div>
+    </section>
+
+    <section id="stage-starting" class="stage-empty" hidden>
+      <div class="stage-label">STARTING…</div>
+      <div id="stage-starting-detail" class="stage-song"></div>
+    </section>
+  </main>
+
+  <aside class="stage-after" id="stage-after" hidden>
+    <div class="stage-after-title">AFTER THAT</div>
+    <ol id="stage-after-list"></ol>
+  </aside>
+
+  <audio id="stage-filler" preload="auto"></audio>
+
+  <script>
+    window.KT_STAGE = { token: "{{ token }}", state: {{ stage_state|tojson }} };
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='js/stage.js') }}"></script>
+</body>
+</html>

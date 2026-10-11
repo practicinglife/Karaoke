@@ -27,6 +27,42 @@
       <button data-action="next">NEXT</button>
       <button data-action="clear">CLEAR QUEUE</button>
     </section>
+    <section class="card" id="stage-card">
+      <h2>Stage Screen</h2>
+      <p class="stage-status">State: <strong id="stage-state">-</strong> <span id="stage-next"></span></p>
+      <p id="stage-message" class="error" hidden></p>
+      <label for="stage-monitor-select">Stage screen</label>
+      <select id="stage-monitor-select">
+        {% for m in monitors %}
+        <option value="{{ m.number }}" {% if stage_monitor == m.number|string %}selected{% endif %}>{{ m.label }}</option>
+        {% else %}
+        <option value="{{ stage_monitor }}" selected>Screen {{ stage_monitor }}</option>
+        {% endfor %}
+      </select>
+      <button type="button" data-stage-action="move">MOVE STAGE TO THIS SCREEN</button>
+      <button type="button" data-stage-action="open">OPEN STAGE</button>
+      <button type="button" data-stage-action="start_next">START NEXT SINGER NOW</button>
+      <button type="button" data-stage-action="close">CLOSE STAGE</button>
+      <button type="button" data-stage-action="test_selectors">TEST SELECTORS ON CURRENT SONG PAGE</button>
+      <pre id="stage-report" class="stage-report" hidden></pre>
+
+      <h3>Teach a service</h3>
+      <p>Open a song, then do exactly what you would do by hand (play, lyrics, maximize, full screen). The app records your clicks and repeats them for every song from that service.</p>
+      <label for="teach-service">Service</label>
+      <select id="teach-service">
+        <option value="apple_music">Apple Music</option>
+        <option value="spotify">Spotify</option>
+        <option value="youtube">YouTube</option>
+        <option value="youtube_music">YouTube Music</option>
+      </select>
+      <label for="teach-url">Song link</label>
+      <input id="teach-url" placeholder="https://music.apple.com/us/song/...">
+      <button type="button" data-stage-action="teach_start">START TEACHING</button>
+      <button type="button" data-stage-action="teach_save">SAVE WHAT I DID</button>
+      <button type="button" data-stage-action="teach_cancel">CANCEL TEACHING</button>
+      <button type="button" data-stage-action="teach_reset">USE BUILT-IN STEPS FOR THIS SERVICE</button>
+      <ol id="teach-steps" class="stage-report" hidden></ol>
+    </section>
     <section class="card">
       <h2>Up Next</h2>
       <table id="queue-table">

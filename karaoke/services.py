@@ -34,6 +34,14 @@ SETTING_KEYS = {
     "singer_rotation_on",
     "house_name",
     "first_run_completed",
+    "stage_enabled",
+    "stage_monitor",
+    "stage_fullscreen",
+    "intermission_folder",
+    "countdown_seconds",
+    "countdown_expiry_action",
+    "ready_hotkey",
+    "stage_button_secret",
 }
 
 
@@ -51,6 +59,14 @@ DEFAULT_SETTINGS = {
     "singer_rotation_on": "1",
     "house_name": "Karaoke Ticker",
     "first_run_completed": "0",
+    "stage_enabled": "0",
+    "stage_monitor": "2",
+    "stage_fullscreen": "1",
+    "intermission_folder": "",
+    "countdown_seconds": "60",
+    "countdown_expiry_action": "wait",
+    "ready_hotkey": "f9",
+    "stage_button_secret": "",
 }
 
 
@@ -60,6 +76,12 @@ def ensure_default_settings(session: Session) -> None:
         if not session.get(Setting, key):
             session.add(Setting(key=key, value=value))
     session.flush()
+    # Long-lived key for network ready buttons (Flic, ESP32...), so their URL
+    # doesn't change every night the way the per-house admin token does.
+    secret = session.get(Setting, "stage_button_secret")
+    if secret and not secret.value:
+        secret.value = secrets.token_urlsafe(16)
+        session.flush()
 
 
 def get_setting(session: Session, key: str) -> str:

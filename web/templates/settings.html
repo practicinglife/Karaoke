@@ -37,6 +37,33 @@
       <label>Ticker Upcoming Count</label>
       <input name="ticker_upcoming_count" value="{{ values['ticker_upcoming_count'] }}" required>
       <label><input type="checkbox" name="singer_rotation_on" {% if values['singer_rotation_on'] == '1' %}checked{% endif %}> Singer Rotation ON</label>
+
+      <h2>Stage Screen</h2>
+      <p>Plays songs in a dedicated Edge window on the audience screen. Between songs it shows the next singer with a countdown and plays intermission music until they press ready.</p>
+      <label><input type="checkbox" name="stage_enabled" {% if values['stage_enabled'] == '1' %}checked{% endif %}> Use the stage screen for YouTube, YouTube Music, Spotify, Apple Music and built-in traditional karaoke</label>
+      <label>Stage screen (where the playback window opens)</label>
+      <select name="stage_monitor">
+        {% for m in monitors %}
+        <option value="{{ m.number }}" {% if values['stage_monitor'] == m.number|string %}selected{% endif %}>{{ m.label }}</option>
+        {% else %}
+        <option value="{{ values['stage_monitor'] }}" selected>Screen {{ values['stage_monitor'] }}</option>
+        {% endfor %}
+      </select>
+      <label><input type="checkbox" name="stage_fullscreen" {% if values['stage_fullscreen'] == '1' %}checked{% endif %}> Open the stage window full screen</label>
+      <label>Intermission music folder</label>
+      <input name="intermission_folder" value="{{ values['intermission_folder'] }}" placeholder="C:\\Music\\Intermission">
+      <label>Countdown (seconds)</label>
+      <input name="countdown_seconds" value="{{ values['countdown_seconds'] }}" inputmode="numeric">
+      <label>When the countdown runs out</label>
+      <select name="countdown_expiry_action">
+        <option value="wait" {% if values['countdown_expiry_action'] == 'wait' %}selected{% endif %}>Keep waiting for the singer</option>
+        <option value="start" {% if values['countdown_expiry_action'] == 'start' %}selected{% endif %}>Start their song anyway</option>
+        <option value="bump" {% if values['countdown_expiry_action'] == 'bump' %}selected{% endif %}>Move them down one and call the next singer</option>
+      </select>
+      <label>Ready button key (sent by a foot pedal, presenter clicker or Bluetooth remote; e.g. f9, page down, volume up)</label>
+      <input name="ready_hotkey" value="{{ values['ready_hotkey'] }}" maxlength="40">
+      <label>Network ready button URL (for Flic, ESP32 or smart buttons)</label>
+      <input value="{{ stage_button_url }}" readonly>
       <button type="submit" name="settings_action" value="save">SAVE SETTINGS</button>
       <button type="submit" name="settings_action" value="test_external">TEST EXTERNAL APPLICATION PATH</button>
     </form>

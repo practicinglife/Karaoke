@@ -17,82 +17,84 @@ async function postAction(action, queueItemId = "") {
 }
 
 let refreshInFlight = false;
-let controllerRefreshInFlight = false;
 
-const controllerStateEl = document.getElementById("controller-state");
-const controllerServiceEl = document.getElementById("controller-service");
-const controllerSingerEl = document.getElementById("controller-singer");
-const controllerSongEl = document.getElementById("controller-song");
-const controllerErrorEl = document.getElementById("controller-error");
-const controllerRecentActionsEl = document.getElementById("controller-recent-actions");
-const controllerStartBtn = document.getElementById("controller-start-btn");
-const controllerStopBtn = document.getElementById("controller-stop-btn");
-const controllerStopAllBtn = document.getElementById("controller-stop-all-btn");
+const stageStateEl = document.getElementById("stage-state");
+const stageNextEl = document.getElementById("stage-next");
+const stageMessageEl = document.getElementById("stage-message");
+const stageReportEl = document.getElementById("stage-report");
+const teachStepsEl = document.getElementById("teach-steps");
 
-function renderControllerStatus(status) {
-  if (!status || typeof status !== "object") {
-    if (controllerStateEl) controllerStateEl.textContent = "STOPPED";
-    if (controllerServiceEl) controllerServiceEl.textContent = "-";
-    if (controllerSingerEl) controllerSingerEl.textContent = "-";
-    if (controllerSongEl) controllerSongEl.textContent = "-";
-    if (controllerErrorEl) controllerErrorEl.textContent = "-";
-    if (controllerRecentActionsEl) controllerRecentActionsEl.textContent = "No controller actions yet.";
-    return;
-  }
-
-  const activeJob = status.active_job || null;
-  const rawState = status.state || "IDLE";
-  let displayState = rawState;
-  if (!status.connected) {
-    displayState = "STOPPED";
-  } else if (["PREPARING", "STARTING", "VERIFYING_START", "PLAYING", "STOPPING"].includes(rawState)) {
-    displayState = `RUNNING (${rawState})`;
-  }
-
-  if (controllerStateEl) controllerStateEl.textContent = displayState;
-  if (controllerServiceEl) controllerServiceEl.textContent = activeJob && activeJob.service ? activeJob.service : "-";
-  if (controllerSingerEl) controllerSingerEl.textContent = activeJob && activeJob.singer ? activeJob.singer : "-";
-  if (controllerSongEl) controllerSongEl.textContent = activeJob && activeJob.title ? activeJob.title : "-";
-  if (controllerErrorEl) controllerErrorEl.textContent = status.last_error || "-";
-  if (controllerRecentActionsEl) {
-    const recent = Array.isArray(status.recent_actions) ? status.recent_actions : [];
-    controllerRecentActionsEl.textContent = recent.length ? recent.join("\n") : "No controller actions yet.";
-  }
-}
-
-async function refreshControllerStatus() {
-  if (controllerRefreshInFlight) {
-    return;
-  }
-  controllerRefreshInFlight = true;
-  try {
-    const res = await fetch("/api/playback/status", {
-      headers: { "X-Admin-Token": window.KT_ADMIN.token },
-    });
-    if (!res.ok) {
-      return;
+function renderStageStatus(stage) {
+  if (!stage || !stageStateEl) return;
+  stageStateEl.textContent = stage.browser_running ? stage.state : "CLOSED";
+  const next = stage.next;
+  stageNextEl.textContent = stage.state === "INTERMISSION" && next ? `— waiting for ${next.user} (${next.song})` : "";
+  stageMessageEl.textContent = stage.message || "";
+  stageMessageEl.hidden = !stage.message;
+  if (teachStepsEl) {
+    const steps = stage.teach ? stage.teach.steps || [] : [];
+    teachStepsEl.hidden = !stage.teach;
+    teachStepsEl.innerHTML = "";
+    for (const label of steps) {
+      const li = document.createElement("li");
+      li.textContent = label;
+      teachStepsEl.appendChild(li);
     }
-    const data = await res.json();
-    renderControllerStatus(data.status || null);
-  } finally {
-    controllerRefreshInFlight = false;
+    if (stage.teach && !steps.length) {
+      const li = document.createElement("li");
+      li.textContent = "Recording… click through the song in the stage window.";
+      teachStepsEl.appendChild(li);
+    }
   }
 }
 
-async function postControllerAction(path) {
-  const res = await fetch(path, {
+async function refreshStageStatus() {
+  if (!stageStateEl) return;
+  const res = await fetch("/api/stage", { headers: { "X-Admin-Token": window.KT_ADMIN.token } });
+  if (res.ok) renderStageStatus(await res.json());
+}
+
+function formatSelectorReport(report) {
+  if (!report || report.error) return report?.error || "No report.";
+  const lines = [`${report.service || "unknown service"} — ${report.url}`, `media: ${JSON.stringify(report.media)}`, ""];
+  for (const row of report.selectors || []) {
+    const mark = row.visible ? "VISIBLE" : row.count > 0 ? "hidden " : row.count < 0 ? "ERROR  " : "missing";
+    lines.push(`${mark}  [${row.group}]  ${row.selector}`);
+  }
+  return lines.join("
+");
+}
+
+async function postStageAction(action) {
+  const form = new URLSearchParams();
+  form.set("action", action);
+  form.set("csrf_token", window.KT_ADMIN.csrfToken);
+  const monitorSelect = document.getElementById("stage-monitor-select");
+  if (monitorSelect instanceof HTMLSelectElement) {
+    form.set("monitor", monitorSelect.value);
+  }
+  const teachService = document.getElementById("teach-service");
+  const teachUrl = document.getElementById("teach-url");
+  if (teachService instanceof HTMLSelectElement) form.set("service", teachService.value);
+  if (teachUrl instanceof HTMLInputElement) form.set("url", teachUrl.value.trim());
+  const res = await fetch("/admin/stage", {
     method: "POST",
-    headers: {
-      "X-Admin-Token": window.KT_ADMIN.token,
-      "X-CSRF-Token": window.KT_ADMIN.csrfToken,
-    },
+    headers: { "X-Admin-Token": window.KT_ADMIN.token },
+    body: form,
   });
-  if (!res.ok) {
-    const text = await res.text();
-    alert(`Controller action failed: ${text}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    alert(data.message || "Stage action failed.");
     return;
   }
-  await refreshControllerStatus();
+  if (data.report && stageReportEl) {
+    stageReportEl.hidden = false;
+    stageReportEl.textContent = formatSelectorReport(data.report);
+  }
+  if (data.stage) renderStageStatus(data.stage);
+  if (action === "teach_save") alert(data.saved_steps ? `Saved ${data.saved_steps} steps.` : "Nothing was recorded, so nothing was saved.");
+  if (action === "teach_reset") alert("Using the built-in steps for this service again.");
+  await refreshQueue();
 }
 
 async function refreshQueue() {
@@ -173,6 +175,10 @@ async function refreshQueue() {
 document.addEventListener("click", async (event) => {
   const target = event.target;
   if (!(target instanceof HTMLButtonElement)) return;
+  if (target.dataset.stageAction) {
+    await postStageAction(target.dataset.stageAction);
+    return;
+  }
   const action = target.dataset.action;
   if (!action) return;
   const row = target.closest("tr");
@@ -199,25 +205,7 @@ if (adminUserModsToggle instanceof HTMLInputElement) {
   });
 }
 
-if (controllerStartBtn instanceof HTMLButtonElement) {
-  controllerStartBtn.addEventListener("click", async () => {
-    await postControllerAction("/api/playback/start-controller");
-  });
-}
-
-if (controllerStopBtn instanceof HTMLButtonElement) {
-  controllerStopBtn.addEventListener("click", async () => {
-    await postControllerAction("/api/playback/stop-controller");
-  });
-}
-
-if (controllerStopAllBtn instanceof HTMLButtonElement) {
-  controllerStopAllBtn.addEventListener("click", async () => {
-    await postControllerAction("/api/playback/stop-all");
-  });
-}
-
 refreshQueue();
-refreshControllerStatus();
+refreshStageStatus();
 setInterval(refreshQueue, 12000);
-setInterval(refreshControllerStatus, 1500);
+setInterval(refreshStageStatus, 1500);

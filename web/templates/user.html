@@ -24,6 +24,14 @@
       <div class="user-queue-notification-title"></div>
       <div class="user-queue-notification-detail"></div>
     </div>
+    <button
+      type="button"
+      id="stage-ready-btn"
+      class="stage-ready-btn"
+      data-ready-url="{{ url_for('web.stage_ready_guest') }}"
+      data-user-name="{{ user.display_name }}"
+      hidden
+    >START MY SONG</button>
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <ul>
@@ -128,6 +136,8 @@
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="{{ url_for('static', filename='js/user.js') }}"></script>
   <script src="{{ url_for('static', filename='js/user-notifications.js') }}"></script>
+  <script>window.KT_STAGE_STATE = {{ stage_state|tojson }};</script>
+  <script src="{{ url_for('static', filename='js/user-stage.js') }}"></script>
 </body>
 </html>
 

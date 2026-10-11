@@ -431,6 +431,9 @@ if (songTilesEl && window.io) {
     applyQueuedSongState(queuedIds);
     window.dispatchEvent(new CustomEvent("karaoke:queue-updated", { detail: payload }));
   });
+  socket.on("stage_state", (payload) => {
+    window.dispatchEvent(new CustomEvent("karaoke:stage-state", { detail: payload }));
+  });
 }
 
 setDeleteMode(false);

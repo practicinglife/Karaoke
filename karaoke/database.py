@@ -88,8 +88,12 @@ class DatabaseManager:
         if any(index["name"] == LIBRARY_PRIMARY_FILE_INDEX for index in indexes):
             return
 
-        with self.engine.begin() as conn:
+        with self.engine.connect() as conn:
             before = conn.exec_driver_sql("SELECT COUNT(*) FROM karaoke_library").scalar_one()
+        if before:
+            self._backup_before_migration()
+
+        with self.engine.begin() as conn:
             logging.info("Deduplicating karaoke library (%s rows)...", before)
             for statement in _DEDUPE_LIBRARY_SQL:
                 conn.exec_driver_sql(statement)
@@ -99,6 +103,18 @@ class DatabaseManager:
         if before - after > 10_000 and self.engine.dialect.name == "sqlite":
             with self.engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
                 conn.exec_driver_sql("VACUUM")
+
+    def _backup_before_migration(self) -> None:
+        """Copy the database aside before the one-time cleanup touches it."""
+        from .backup import copy_database, sqlite_file
+        from .utils import utcnow
+
+        db_file = sqlite_file(str(self.engine.url))
+        if not db_file or not db_file.exists():
+            return
+        target = db_file.parent / "backups" / f"pre-cleanup-{utcnow().strftime('%Y-%m-%d_%H%M%S')}.db"
+        copy_database(db_file, target)
+        logging.info("Backed up database before library cleanup: %s", target)
 
     @contextmanager
     def session_scope(self) -> Iterator[Session]:
