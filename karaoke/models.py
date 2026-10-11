@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .database import Base
+from .database import LIBRARY_PRIMARY_FILE_INDEX, Base
 from .utils import utcnow
 
 
@@ -28,6 +28,7 @@ class KaraokeLibrary(Base):
     """Indexed karaoke media item."""
 
     __tablename__ = "karaoke_library"
+    __table_args__ = (Index(LIBRARY_PRIMARY_FILE_INDEX, "primary_file", unique=True),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

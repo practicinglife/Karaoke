@@ -240,7 +240,7 @@ class BackgroundIndexer:
         self,
         karaoke_root: str,
         manifest_path: str | None = None,
-    ) -> tuple[bool, str]:
+    ) -> tuple[bool, str, dict[str, Any]]:
         old_snapshot = self._load_snapshot()
         old_files = old_snapshot.get("files") if isinstance(old_snapshot.get("files"), dict) else {}
 
@@ -261,7 +261,10 @@ class BackgroundIndexer:
 
         self._save_snapshot(new_snapshot)
         self._set_last_run()
-        return (added + removed + changed) > 0, summary
+        return (added + removed + changed) > 0, summary, new_snapshot
+
+    def _build_progress(self, done: int, total: int) -> None:
+        self._set_progress(0.3 + 0.65 * (done / total if total else 1.0), f"Indexing {done}/{total} files")
 
     def _run_index_pass(
         self,
@@ -269,19 +272,21 @@ class BackgroundIndexer:
         karaoke_root: str,
         manifest_path: str | None = None,
     ) -> None:
+        # Check before walking the folder: while a house runs, the deferred retry loop
+        # polls every few seconds and must not rescan the whole library each time.
+        if active_session(session):
+            self._set_status(status="Index deferred (house running)")
+            self._set_progress(0.0, "Deferred while house running")
+            self._deferred_index = True
+            return
+
         self._set_progress(0.05, "Snapshot compare")
-        has_changes, summary = self._compare_and_persist_snapshot(karaoke_root, manifest_path)
+        has_changes, summary, snapshot = self._compare_and_persist_snapshot(karaoke_root, manifest_path)
         self._set_status(compare=summary)
 
         cache_file = Path(DATA_DIR) / "karaoke_index_cache.json"
         static_file = Path(__file__).resolve().parent.parent / "web" / "static" / "data" / "karaoke_index.json"
         needs_first_build = not cache_file.exists() or not static_file.exists()
-
-        if active_session(session):
-            self._set_status(status="Index deferred (house running)")
-            self._set_progress(0.0, "Deferred while house running")
-            self._deferred_index = self._deferred_index or has_changes or needs_first_build
-            return
 
         if not has_changes and not needs_first_build and not self._deferred_index:
             self._set_status(status="Ready (no changes)")
@@ -294,8 +299,10 @@ class BackgroundIndexer:
             count = build_index_from_manifest(session, manifest_path)
         else:
             self._set_status(status="Indexing local library...")
-            self._set_progress(0.25, "Building local index")
-            count = build_index(session, karaoke_root)
+            self._set_progress(0.3, "Building local index")
+            root = Path(karaoke_root)
+            files = [root / rel for rel in snapshot.get("files", {})]
+            count = build_index(session, karaoke_root, files=files, progress=self._build_progress)
 
         self._deferred_index = False
         self._set_status(status=f"Ready (indexed {count} entries)")
@@ -330,7 +337,7 @@ class BackgroundIndexer:
                             self._request_compare.clear()
                             self._set_status(status="Comparing library snapshot...")
                             self._set_progress(0.1, "Compare requested")
-                            _, summary = self._compare_and_persist_snapshot(run_root, selected_manifest)
+                            _, summary, _ = self._compare_and_persist_snapshot(run_root, selected_manifest)
                             self._set_status(status="Compare complete", compare=summary)
                             self._set_progress(1.0, "Compare complete")
 

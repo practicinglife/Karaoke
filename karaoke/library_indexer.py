@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 import json
 
 from rapidfuzz import fuzz
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
-from .models import KaraokeLibrary
+from .models import KaraokeLibrary, Song
 from .utils import normalize_text, split_artist_title_from_name
 from config import DATA_DIR
 
@@ -99,148 +99,127 @@ def _finalize_index_outputs(session: Session, cache_path: Path) -> None:
         json.dump(items, sf, ensure_ascii=False)
 
 
-def build_index(session: Session, karaoke_root: str) -> int:
-    """Scan karaoke root and rebuild active index."""
+def _pair_record(mp3_path: Path, cdg_path: Path) -> dict[str, str | int]:
+    """Build record data for an MP3+CDG pair (primary file is the MP3)."""
+    stem_data = _record_from_stem(mp3_path.stem)
+    mp3_stat = mp3_path.stat()
+    cdg_stat = cdg_path.stat()
+    return {
+        "title": stem_data["title"],
+        "artist": stem_data["artist"],
+        "display_name": stem_data["display_name"],
+        "primary_file": str(mp3_path),
+        "audio_file": str(mp3_path),
+        "cdg_file": str(cdg_path),
+        "folder": str(mp3_path.parent),
+        "extension": ".mp3+.cdg",
+        "modified_time": str(int(max(mp3_stat.st_mtime, cdg_stat.st_mtime))),
+        "file_size": int(mp3_stat.st_size + cdg_stat.st_size),
+        "active": True,
+        "search_blob": stem_data["search_blob"],
+    }
+
+
+def _purge_unreferenced_inactive(session: Session) -> None:
+    """Delete inactive library rows that no saved song points at."""
+    referenced = select(Song.karaoke_library_id).where(Song.karaoke_library_id.is_not(None))
+    session.execute(
+        delete(KaraokeLibrary)
+        .where(KaraokeLibrary.active == False)  # noqa: E712
+        .where(KaraokeLibrary.id.not_in(referenced))
+    )
+
+
+def build_index(
+    session: Session,
+    karaoke_root: str,
+    *,
+    files: Iterable[Path] | None = None,
+    progress: Callable[[int, int], None] | None = None,
+) -> int:
+    """Scan karaoke root and rebuild active index.
+
+    Existing rows are reused by ``primary_file`` so rescans never duplicate entries.
+    ``files`` may be supplied to skip a second directory walk; ``progress(done, total)``
+    is called periodically. Returns the number of newly created rows.
+    """
     root = Path(karaoke_root)
     if not root.exists():
         raise FileNotFoundError(f"Karaoke folder not found: {karaoke_root}")
 
-    files: list[Path] = [
-        path
-        for path in root.rglob("*")
-        if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS
-    ]
+    if files is None:
+        file_list = [
+            path
+            for path in root.rglob("*")
+            if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS
+        ]
+    else:
+        file_list = [path for path in files if path.suffix.lower() in SUPPORTED_EXTENSIONS]
+    # Case-insensitive lookup for MP3/CDG companions without a stat() per file.
+    present = {str(path).lower() for path in file_list}
 
-    # Load on-disk cache mapping primary_file -> metadata to avoid re-processing unchanged files.
-    cache_path = Path(DATA_DIR) / "karaoke_index_cache.json"
-    cached: dict[str, dict] = {}
-    try:
-        if cache_path.exists():
-            with cache_path.open("r", encoding="utf-8") as fh:
-                cached = json.load(fh)
-    except Exception:
-        # If cache is unreadable, ignore and rebuild; do not crash indexing.
-        cached = {}
-
-    # Mark all existing DB entries inactive and create a fast lookup map.
-    existing_rows = list(session.scalars(select(KaraokeLibrary)))
-    for item in existing_rows:
-        item.active = False
-    existing_by_primary: dict[str, KaraokeLibrary] = {
-        row.primary_file: row for row in existing_rows
+    session.execute(update(KaraokeLibrary).values(active=False))
+    existing: dict[str, tuple[int, str, int]] = {
+        primary: (row_id, mtime, size)
+        for row_id, primary, mtime, size in session.execute(
+            select(
+                KaraokeLibrary.id,
+                KaraokeLibrary.primary_file,
+                KaraokeLibrary.modified_time,
+                KaraokeLibrary.file_size,
+            )
+        )
     }
 
-    paired: set[Path] = set()
+    unchanged_ids: list[int] = []
+    seen: set[str] = set()
     created = 0
+    total = len(file_list)
 
-    for path in files:
-        if path in paired:
-            continue
-        suffix = path.suffix.lower()
-        if suffix in {".mp3", ".cdg"}:
-            companion = path.with_suffix(".cdg" if suffix == ".mp3" else ".mp3")
-            if companion.exists():
-                base = _record_from_stem(path.stem)
-                mp3_path = path.with_suffix(".mp3")
-                cdg_path = path.with_suffix(".cdg")
-                if mp3_path.exists():
-                    paired.add(mp3_path)
-                if cdg_path.exists():
-                    paired.add(cdg_path)
-                record = KaraokeLibrary(
-                    title=base["title"],  # type: ignore[arg-type]
-                    artist=base["artist"],  # type: ignore[arg-type]
-                    display_name=base["display_name"],  # type: ignore[arg-type]
-                    primary_file=str(mp3_path if mp3_path.exists() else cdg_path),
-                    audio_file=str(mp3_path) if mp3_path.exists() else None,
-                    cdg_file=str(cdg_path) if cdg_path.exists() else None,
-                    folder=str(path.parent),
-                    extension=".mp3+.cdg",
-                    modified_time=str(
-                        int(
-                            max(
-                                mp3_path.stat().st_mtime if mp3_path.exists() else 0,
-                                cdg_path.stat().st_mtime if cdg_path.exists() else 0,
-                            )
-                        )
-                    ),
-                    file_size=int(
-                        (mp3_path.stat().st_size if mp3_path.exists() else 0)
-                        + (cdg_path.stat().st_size if cdg_path.exists() else 0)
-                    ),
-                    active=True,
-                    search_blob=normalize_text(
-                        f"{base['artist']} {base['title']} {base['display_name']} {path.stem}"
-                    ),
-                )
-                session.add(record)
-                created += 1
-                continue
-        # Quick path: if cache contains matching metadata and file stats match, re-activate DB row.
-        primary = str(path)
+    for done, path in enumerate(file_list, start=1):
+        if progress and (done % 500 == 0 or done == total):
+            progress(done, total)
+
+        mp3_path = path.with_suffix(".mp3")
+        cdg_path = path.with_suffix(".cdg")
+        is_pair = (
+            path.suffix.lower() in {".mp3", ".cdg"}
+            and str(mp3_path).lower() in present
+            and str(cdg_path).lower() in present
+        )
+        primary = str(mp3_path if is_pair else path)
+        if primary in seen:
+            continue  # second half of an MP3+CDG pair
+        seen.add(primary)
+
         try:
-            stat = path.stat()
-            mtime = str(int(stat.st_mtime))
-            fsize = int(stat.st_size)
-        except Exception:
-            mtime = ""
-            fsize = 0
+            record_data = _pair_record(mp3_path, cdg_path) if is_pair else _record_from_file(path)
+        except OSError:
+            continue
+        record_data["audio_file"] = record_data["audio_file"] or None  # type: ignore[assignment]
+        record_data["cdg_file"] = record_data["cdg_file"] or None  # type: ignore[assignment]
 
-        cached_entry = cached.get(primary)
-        existing = existing_by_primary.get(primary)
-        if cached_entry and cached_entry.get("modified_time") == mtime and cached_entry.get("file_size") == fsize:
-            # Reactivate existing DB record if present
-            if existing:
-                existing.active = True
-                paired.add(path)
-                # nothing new created
-                continue
-
-        # If no cache hit, check existing row metadata as fallback
-        if existing:
-            try:
-                if existing.modified_time == mtime and existing.file_size == fsize:
-                    existing.active = True
-                    paired.add(path)
-                    continue
-            except Exception:
-                pass
-
-        record_data = _record_from_file(path)
-        if existing:
-            existing.title = record_data["title"]  # type: ignore[assignment]
-            existing.artist = record_data["artist"]  # type: ignore[assignment]
-            existing.display_name = record_data["display_name"]  # type: ignore[assignment]
-            existing.audio_file = record_data["audio_file"] or None  # type: ignore[assignment]
-            existing.cdg_file = record_data["cdg_file"] or None  # type: ignore[assignment]
-            existing.folder = record_data["folder"]  # type: ignore[assignment]
-            existing.extension = record_data["extension"]  # type: ignore[assignment]
-            existing.modified_time = record_data["modified_time"]  # type: ignore[assignment]
-            existing.file_size = record_data["file_size"]  # type: ignore[assignment]
-            existing.active = True
-            existing.search_blob = record_data["search_blob"]  # type: ignore[assignment]
-        else:
-            row = KaraokeLibrary(
-                title=record_data["title"],  # type: ignore[arg-type]
-                artist=record_data["artist"],  # type: ignore[arg-type]
-                display_name=record_data["display_name"],  # type: ignore[arg-type]
-                primary_file=record_data["primary_file"],  # type: ignore[arg-type]
-                audio_file=record_data["audio_file"] or None,  # type: ignore[arg-type]
-                cdg_file=record_data["cdg_file"] or None,  # type: ignore[arg-type]
-                folder=record_data["folder"],  # type: ignore[arg-type]
-                extension=record_data["extension"],  # type: ignore[arg-type]
-                modified_time=record_data["modified_time"],  # type: ignore[arg-type]
-                file_size=record_data["file_size"],  # type: ignore[arg-type]
-                active=True,
-                search_blob=record_data["search_blob"],  # type: ignore[arg-type]
-            )
-            session.add(row)
-            existing_by_primary[primary] = row
+        match = existing.get(primary)
+        if match is None:
+            session.add(KaraokeLibrary(**record_data))
             created += 1
+            continue
+        row_id, mtime, size = match
+        if mtime == record_data["modified_time"] and size == record_data["file_size"]:
+            unchanged_ids.append(row_id)
+            continue
+        row = session.get(KaraokeLibrary, row_id)
+        for key, value in record_data.items():
+            setattr(row, key, value)
+
+    for start in range(0, len(unchanged_ids), 500):
+        chunk = unchanged_ids[start : start + 500]
+        session.execute(update(KaraokeLibrary).where(KaraokeLibrary.id.in_(chunk)).values(active=True))
     session.flush()
+    _purge_unreferenced_inactive(session)
 
     try:
-        _finalize_index_outputs(session, cache_path)
+        _finalize_index_outputs(session, Path(DATA_DIR) / "karaoke_index_cache.json")
     except Exception:
         # Don't fail indexing on cache write errors.
         pass
@@ -274,8 +253,7 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
     if not isinstance(payload, list):
         raise ValueError("Manifest file must contain a JSON array.")
 
-    for item in session.scalars(select(KaraokeLibrary)):
-        item.active = False
+    session.execute(update(KaraokeLibrary).values(active=False))
 
     existing_by_primary: dict[str, KaraokeLibrary] = {
         row.primary_file: row
@@ -348,6 +326,7 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
         processed += 1
 
     session.flush()
+    _purge_unreferenced_inactive(session)
 
     try:
         _finalize_index_outputs(session, Path(DATA_DIR) / "karaoke_index_cache.json")
