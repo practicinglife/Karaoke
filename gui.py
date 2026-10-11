@@ -290,10 +290,7 @@ class KaraokeTickerGUI(ctk.CTk):
             return
         messagebox.showinfo(
             "Backup",
-            f"Saved singers, songs and the full database to:
-{folder}
-
-"
+            f"Saved singers, songs and the full database to:\n{folder}\n\n"
             f"Use IMPORT USER DATA with {user_backup.JSON_NAME} to load the singers and songs into another copy of the app.",
         )
         try:
@@ -317,9 +314,7 @@ class KaraokeTickerGUI(ctk.CTk):
             logger.exception("Import failed")
             messagebox.showerror("Import", f"Import failed: {exc}")
             return
-        messagebox.showinfo("Import", "Nothing was deleted or changed.
-
-" + result.summary())
+        messagebox.showinfo("Import", "Nothing was deleted or changed.\n\n" + result.summary())
 
     def refresh_library(self) -> None:
         # Request a background re-index. Indexer will skip indexing while a house session is running.
