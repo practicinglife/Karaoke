@@ -126,3 +126,10 @@ def test_traditional_search_prioritizes_artist_matches(app, test_karaoke_folder)
         assert results
         assert results[0].artist == "Garth Brooks"
         assert any(row.title == "Garth Tribute" for row in results)
+
+
+def test_database_uses_wal_so_reads_never_wait_on_a_scan(tmp_path: Path) -> None:
+    manager = DatabaseManager(f"sqlite:///{(tmp_path / 'wal.db').as_posix()}")
+    manager.create_all()
+    with manager.engine.connect() as conn:
+        assert conn.exec_driver_sql("PRAGMA journal_mode").scalar_one().lower() == "wal"

@@ -15,9 +15,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from sqlalchemy import func, select
+
 from config import DATA_DIR
 
 from .library_indexer import SUPPORTED_EXTENSIONS, build_index, build_index_from_manifest
+from .models import KaraokeLibrary
 from .services import active_session, get_setting
 from .utils import utcnow
 
@@ -305,8 +308,12 @@ class BackgroundIndexer:
             count = build_index(session, karaoke_root, files=files, progress=self._build_progress)
 
         self._deferred_index = False
-        self._set_status(status=f"Ready (indexed {count} entries)")
-        self._set_progress(1.0, f"Indexed {count} entries")
+        session.flush()
+        total = session.scalar(
+            select(func.count()).select_from(KaraokeLibrary).where(KaraokeLibrary.active == True)  # noqa: E712
+        ) or 0
+        self._set_status(status=f"Ready ({total:,} songs, {count:,} new)")
+        self._set_progress(1.0, f"Done: {total:,} songs in the library")
 
     def _run(self) -> None:
         self._hydrate_status_from_existing_snapshot()

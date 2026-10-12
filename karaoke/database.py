@@ -6,11 +6,21 @@ import logging
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 
 Base = declarative_base()
+
+
+def _sqlite_pragmas(dbapi_connection, _record) -> None:
+    """WAL lets the GUI, web pages and indexer read while a library scan is writing."""
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+    finally:
+        cursor.close()
 
 LIBRARY_PRIMARY_FILE_INDEX = "ux_karaoke_library_primary_file"
 
@@ -64,11 +74,13 @@ class DatabaseManager:
     def __init__(self, database_url: str) -> None:
         self.engine = create_engine(
             database_url,
-            connect_args={"check_same_thread": False}
+            connect_args={"check_same_thread": False, "timeout": 30}
             if database_url.startswith("sqlite")
             else {},
             future=True,
         )
+        if database_url.startswith("sqlite"):
+            event.listen(self.engine, "connect", _sqlite_pragmas)
         self.session_factory = sessionmaker(
             bind=self.engine,
             autoflush=False,

@@ -118,6 +118,8 @@ class KaraokeTickerGUI(ctk.CTk):
         self.server_thread = start_server_thread(self.flask_app, self.config_obj.host, port)
 
     def _refresh_state(self) -> None:
+        # Index status comes from memory, so a busy database can't freeze these labels.
+        self._refresh_index_status()
         with self.runtime_state.db.session_scope() as db:
             record = active_session(db)
             port = int(get_setting(db, "web_server_port") or "8080")
@@ -131,6 +133,7 @@ class KaraokeTickerGUI(ctk.CTk):
                 self.house_code_var.set("------")
                 self.url_var.set(f"http://{ip}:{port}")
 
+    def _refresh_index_status(self) -> None:
         self.index_status_var.set(getattr(self.runtime_state, "index_status", "Idle"))
         self.index_compare_var.set(getattr(self.runtime_state, "index_compare_summary", "No snapshot yet"))
         self.index_last_run_var.set(getattr(self.runtime_state, "index_last_run", "Never"))
@@ -356,8 +359,14 @@ class KaraokeTickerGUI(ctk.CTk):
             messagebox.showerror("Library Error", f"Failed to request compare: {exc}")
 
     def _schedule_status_refresh(self) -> None:
-        self._refresh_state()
-        self.after(1500, self._schedule_status_refresh)
+        # Always reschedule: one failed refresh (e.g. database busy during a scan)
+        # used to stop the chain and freeze the status labels for good.
+        try:
+            self._refresh_state()
+        except Exception:
+            logger.exception("Status refresh failed; will retry")
+        finally:
+            self.after(1500, self._schedule_status_refresh)
 
     def _run_first_launch_setup(self) -> None:
         try:
