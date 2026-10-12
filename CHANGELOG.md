@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.1.0 — 2026-10-11
+
+### Added
+- Stage screen: a dedicated Microsoft Edge window on a chosen monitor plays YouTube,
+  YouTube Music, Spotify, Apple Music and built-in traditional karaoke fullscreen, detects
+  when the song ends, and shows an intermission screen (next singer, countdown, break music)
+  until the singer is ready.
+- Ready triggers: START MY SONG on the singer's phone, a mic-stand iPad/iPhone page (QR code
+  in the desktop app and admin page), a hotkey for foot pedals/presenter clickers, a network
+  button URL, or the host. Admin PLAY works the same way.
+- Per-service steps in `stage/selectors.json` (Apple Music: highlighted track row, lyrics,
+  lyrics full screen) and Teach mode to record a service's steps by hand.
+- Manual mode, and automatic hand-over when the host clicks in the stage window.
+- Recently Played with PLAY AGAIN on the admin page; live admin updates.
+- BACKUP USER DATA / IMPORT USER DATA in the desktop app.
+- `KaraokeTicker.exe --self-test` install check for the stage screen.
+
+### Changed
+- The Windows build bundles Playwright (it drives the installed Edge) and no longer bundles
+  the repo's `data` folder.
+- Library status shows total and new songs; SQLite runs in WAL mode.
+- The web server restarts automatically when the app reopens with a house running.
+
+### Fixed
+- Library rescans duplicated every MP3+CDG pair, growing the database until scans never
+  finished. A one-time cleanup (with an automatic backup first) removes the duplicates.
+- Desktop status froze at "Building local index" during scans.
+- Stage sign-ins were lost when the window closed; no more "Open Spotify?" or Translate
+  popups on the stage.
+
 ## 2026-09-30
 
 ### Added
