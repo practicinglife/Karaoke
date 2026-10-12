@@ -35,7 +35,7 @@ with a countdown and intermission music until that singer presses **ready**.
 
 Settings (Settings page → Stage Screen):
 
-- `stage_enabled` — route PLAY through the stage screen
+- `stage_auto_steps` — `1` (default): the app presses play/lyrics/full screen; `0`: manual mode (AUTOMATIC STEPS switch on the admin Stage card)
 - `stage_monitor` — which screen the window opens on (dropdown of detected screens; MOVE STAGE TO THIS SCREEN on the admin page moves an open window)
 - `stage_fullscreen` — open the window full screen
 - `intermission_folder` — music played between songs (mp3, m4a, aac, wav, ogg, flac)
