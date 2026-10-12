@@ -47,6 +47,7 @@ class KaraokeTickerGUI(ctk.CTk):
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self.exit_app)
+        self._resume_running_house()
         self._refresh_state()
         self._schedule_status_refresh()
         self.after(350, self._run_first_launch_setup)
@@ -118,6 +119,17 @@ class KaraokeTickerGUI(ctk.CTk):
             return
         logger.info("Starting embedded web server host=%s port=%s", self.config_obj.host, port)
         self.server_thread = start_server_thread(self.flask_app, self.config_obj.host, port)
+
+    def _resume_running_house(self) -> None:
+        """After a restart, bring the web server back so phones and the mic stand reconnect."""
+        try:
+            with self.runtime_state.db.session_scope() as db:
+                if not active_session(db):
+                    return
+                port = int(get_setting(db, "web_server_port") or "8080")
+            self._ensure_server_running(port)
+        except Exception:
+            logger.exception("Could not restart the web server for the running house")
 
     def _refresh_state(self) -> None:
         # Index status comes from memory, so a busy database can't freeze these labels.
