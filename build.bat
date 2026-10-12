@@ -37,12 +37,20 @@ if exist "%EXE_PATH%" (
 )
 
 echo Building KaraokeTicker.exe...
+rem Never bundle the repo's data folder: it holds the database, backups and the stage
+rem browser profile (sign-in cookies). The packaged app keeps its data in
+rem %%LOCALAPPDATA%%\KaraokeTicker instead.
+rem Playwright (stage screen) ships its own PyInstaller hook; --collect-data makes sure its
+rem driver (node.exe + package) is bundled. It drives the installed Microsoft Edge, so no
+rem browser download is needed.
 call .venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --windowed --name KaraokeTicker ^
   --hidden-import engineio.async_drivers.threading ^
   --hidden-import simple_websocket ^
+  --hidden-import keyboard ^
+  --collect-data playwright ^
   --add-data "web;web" ^
   --add-data "karaoke;karaoke" ^
-  --add-data "data;data" ^
+  --add-data "stage;stage" ^
   main.py
 if errorlevel 1 (
   echo ERROR: PyInstaller failed.
@@ -51,6 +59,13 @@ if errorlevel 1 (
 
 if not exist "%EXE_PATH%" (
   echo ERROR: Build completed but %EXE_PATH% was not produced.
+  exit /b 1
+)
+
+echo Checking the stage screen inside the build...
+start "" /wait "%EXE_PATH%" --self-test "%CD%\dist\selftest.json"
+if errorlevel 1 (
+  echo ERROR: Self-test failed. See dist\selftest.json
   exit /b 1
 )
 
