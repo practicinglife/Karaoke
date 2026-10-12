@@ -48,7 +48,7 @@ class StageDriver(Protocol):
     def teach_stop(self, timeout: float = 20.0) -> list[dict[str, Any]]: ...
     def show(self, url: str) -> None: ...
     def play(self, play_id: int, service: str, url: str) -> None: ...
-    def close(self) -> None: ...
+    def close(self, wait_seconds: float = 0.0) -> None: ...
     def test_selectors(self, timeout: float = 20.0) -> dict[str, Any]: ...
 
 
@@ -115,7 +115,7 @@ class StageController:
         if self.driver.is_running:
             self.driver.place(self.monitor_rect(monitor), fullscreen)
 
-    def close(self) -> None:
+    def close(self, wait_seconds: float = 0.0) -> None:
         with self._lock:
             self.driver.close()
             if self.hotkeys:
@@ -123,6 +123,9 @@ class StageController:
             self._ticker_stop.set()
             self.state = IDLE
             self.countdown_ends_at = None
+        if wait_seconds:
+            # Wait outside the lock: the browser thread takes it to report "closed".
+            self.driver.close(wait_seconds)
         self._publish()
 
     # ----- actions -----------------------------------------------------------------

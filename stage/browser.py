@@ -17,6 +17,7 @@ into steps for that service.
 from __future__ import annotations
 
 import atexit
+import json
 import logging
 import os
 import queue
@@ -40,6 +41,8 @@ START_TIMEOUT_SECONDS = 25.0
 POLL_SECONDS = 1.0
 PUMP_MS = 200
 TEACH_SETTLE_SECONDS = 1.5
+PREVIEW_SECONDS = 35.0
+PREVIEW_SERVICES = {"apple_music", "spotify"}
 
 EventCallback = Callable[[str, int, str], None]
 
@@ -60,28 +63,87 @@ def find_browser(channel: str) -> str | None:
     return None
 
 
-def close_leftover_windows(profile_dir: Path) -> None:
-    """Stop Edge processes still holding the stage profile (e.g. after an app crash).
-
-    A second Edge started on the same profile hands off to the old one and exits,
-    which would leave the app unable to connect. Only processes launched with this
-    exact --user-data-dir are touched, never the user's normal browser.
-    """
+def _profile_processes(profile_dir: Path) -> list[tuple[int, bool]]:
+    """(pid, is_main_browser_process) for Edge/Chrome processes using this profile only."""
     if os.name != "nt":
-        return
+        return []
     profile = str(Path(profile_dir).resolve()).replace("'", "''")
     script = (
         "Get-CimInstance Win32_Process -Filter \"Name='msedge.exe' OR Name='chrome.exe'\" | "
         f"Where-Object {{ $_.CommandLine -like '*--user-data-dir=*{profile}*' }} | "
-        "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+        "ForEach-Object { '{0} {1}' -f $_.ProcessId, [int]($_.CommandLine -notlike '*--type=*') }"
     )
     try:
-        subprocess.run(
+        out = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-            capture_output=True, timeout=20, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
+            capture_output=True, text=True, timeout=20, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        ).stdout
     except Exception:
-        logger.exception("Could not check for leftover stage windows")
+        logger.exception("Could not list stage browser processes")
+        return []
+    found = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) == 2 and parts[0].isdigit():
+            found.append((int(parts[0]), parts[1] == "1"))
+    return found
+
+
+def close_leftover_windows(profile_dir: Path, wait_seconds: float = 15.0) -> None:
+    """Close Edge still holding the stage profile (e.g. after an app crash).
+
+    A second Edge started on the same profile hands off to the old one and exits,
+    which would leave the app unable to connect. Edge is asked to close normally
+    first (like clicking X) so it saves cookies and sign-ins; it is only forced
+    if it hasn't exited after ``wait_seconds``. Only processes launched with this
+    exact --user-data-dir are touched, never the user's normal browser.
+    """
+    processes = _profile_processes(profile_dir)
+    if not processes:
+        return
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    for pid, is_main in processes:
+        if is_main:
+            subprocess.run(["taskkill", "/PID", str(pid)], capture_output=True, creationflags=flags)
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        time.sleep(0.5)
+        processes = _profile_processes(profile_dir)
+        if not processes:
+            return
+    logger.warning("Stage browser did not close; forcing it")
+    for pid, _ in processes:
+        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, creationflags=flags)
+
+
+def wait_for_exit(profile_dir: Path, seconds: float = 15.0) -> bool:
+    """Wait for the stage browser to finish shutting down (it saves cookies on exit)."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if not _profile_processes(profile_dir):
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def disable_background_mode(profile_dir: Path) -> None:
+    """Stop Edge lingering in the background after its window closes (stage profile only).
+
+    A lingering Edge holds the profile, so the next launch would have to close it
+    before it has saved its cookies, and sign-ins would be lost.
+    """
+    local_state = Path(profile_dir) / "Local State"
+    try:
+        data = json.loads(local_state.read_text(encoding="utf-8")) if local_state.exists() else {}
+    except (OSError, ValueError):
+        return  # don't risk damaging a file Edge owns
+    if data.get("background_mode", {}).get("enabled") is False:
+        return
+    data.setdefault("background_mode", {})["enabled"] = False
+    try:
+        local_state.write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        logger.warning("Could not turn off Edge background mode for the stage profile")
 
 
 def _free_port() -> int:
@@ -161,9 +223,12 @@ class StageBrowser:
         """Stop recording and return the recorded steps."""
         return self._call("teach_stop", (), timeout)
 
-    def close(self) -> None:
+    def close(self, wait_seconds: float = 0.0) -> None:
+        """Close the window; optionally wait for Edge to finish saving and exit."""
         if self.is_running:
             self._commands.put(("close", (), None))
+            if wait_seconds and self._thread:
+                self._thread.join(timeout=wait_seconds)
 
     def _call(self, command: str, args: tuple, timeout: float):
         future: Future = Future()
@@ -187,6 +252,7 @@ class StageBrowser:
         port = _free_port()
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         close_leftover_windows(self.profile_dir)
+        disable_background_mode(self.profile_dir)
         subprocess.Popen(
             [
                 executable,
@@ -218,18 +284,24 @@ class StageBrowser:
                 context.expose_binding("__ktRecord", self._on_record)
                 page = context.pages[0] if context.pages else context.new_page()
                 self._loop(page)
-                try:
-                    browser.new_browser_cdp_session().send("Browser.close")
-                except Exception:
-                    pass
+                if not page.is_closed():
+                    # Graceful shutdown: Edge writes cookies/sign-ins to disk on the way out.
+                    try:
+                        browser.new_browser_cdp_session().send("Browser.close")
+                    except Exception:
+                        pass
         except Exception as exc:
-            logger.exception("Stage browser stopped")
-            message = f"Stage browser stopped: {exc}"
+            if "closed" in str(exc).lower():
+                pass  # the window was closed by the user; Edge is shutting down normally
+            else:
+                logger.exception("Stage browser stopped")
+                message = f"Stage browser stopped: {exc}"
         finally:
             self._watch = None
             self._teach = None
-            if browser is None or message != "Stage browser closed.":
-                close_leftover_windows(self.profile_dir)
+            # Never force-kill here: Edge saves sign-ins while it shuts down.
+            if not wait_for_exit(self.profile_dir):
+                logger.info("Stage browser still running after close; it will be closed on next open")
             self.on_event("closed", 0, message)
 
     def _connect(self, pw, port: int):
@@ -318,6 +390,7 @@ class StageBrowser:
         spec = load_selectors(self.selectors_path).get(service, {})
         self._watch = {
             "play_id": play_id,
+            "service": service,
             "spec": spec,
             "deadline": time.monotonic() + START_TIMEOUT_SECONDS,
             "started": False,
@@ -397,6 +470,14 @@ class StageBrowser:
         near_end = duration > 5 and float(state.get("position") or 0) >= duration - 0.75 and not state.get("playing")
         if watch["started"] and not busy and (state.get("ended") or near_end):
             self._watch = None
+            if 0 < duration <= PREVIEW_SECONDS and watch.get("service") in PREVIEW_SERVICES:
+                # Not signed in: the service played a preview clip, not the song.
+                self.on_event(
+                    "attention",
+                    watch["play_id"],
+                    "Only a 30-second preview played. Sign in to the service in the stage window, then press PLAY AGAIN.",
+                )
+                return
             self.on_event("ended", watch["play_id"], "")
 
     # ----- teach mode --------------------------------------------------------------

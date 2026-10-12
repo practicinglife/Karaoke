@@ -97,6 +97,30 @@ async function postStageAction(action) {
   await refreshQueue();
 }
 
+function renderRecent(items) {
+  const tbody = document.querySelector("#recent-table tbody");
+  const empty = document.getElementById("recent-empty");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  for (const item of items) {
+    const tr = document.createElement("tr");
+    for (const value of [item.user, item.song, item.artist, item.service]) {
+      const td = document.createElement("td");
+      td.textContent = value || "";
+      tr.appendChild(td);
+    }
+    const actionTd = document.createElement("td");
+    const btn = document.createElement("button");
+    btn.dataset.action = "play";
+    btn.dataset.id = String(item.id);
+    btn.textContent = "PLAY AGAIN";
+    actionTd.appendChild(btn);
+    tr.appendChild(actionTd);
+    tbody.appendChild(tr);
+  }
+  if (empty) empty.hidden = items.length > 0;
+}
+
 async function refreshQueue() {
   if (refreshInFlight) {
     return;
@@ -130,6 +154,8 @@ async function refreshQueue() {
         delete reopenBtn.dataset.id;
       }
     }
+
+    renderRecent(data.recent || []);
 
     const tbody = document.querySelector("#queue-table tbody");
     tbody.innerHTML = "";
@@ -203,6 +229,13 @@ if (adminUserModsToggle instanceof HTMLInputElement) {
   adminUserModsToggle.addEventListener("change", () => {
     setAdminUserModsVisible(adminUserModsToggle.checked);
   });
+}
+
+if (window.io) {
+  // Live updates instead of waiting for the next poll.
+  const socket = window.io();
+  socket.on("queue_updated", () => refreshQueue());
+  socket.on("stage_state", (stage) => renderStageStatus(stage));
 }
 
 refreshQueue();

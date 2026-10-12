@@ -27,6 +27,16 @@
       <button data-action="next">NEXT</button>
       <button data-action="clear">CLEAR QUEUE</button>
     </section>
+    <section class="card">
+      <h2>Recently Played</h2>
+      <table id="recent-table">
+        <thead>
+          <tr><th>User</th><th>Song</th><th>Artist</th><th>Service</th><th></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p id="recent-empty">Nothing played yet tonight.</p>
+    </section>
     <section class="card" id="stage-card">
       <h2>Stage Screen</h2>
       <p class="stage-status">State: <strong id="stage-state">-</strong> <span id="stage-next"></span></p>
@@ -154,6 +164,7 @@
       csrfToken: "{{ csrf_token }}"
     };
   </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
 </body>
 </html>

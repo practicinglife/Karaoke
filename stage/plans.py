@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 SELECTORS_PATH = Path(__file__).resolve().parent / "selectors.json"
 STREAMING_SERVICES = {"youtube", "spotify", "apple_music"}
@@ -66,16 +66,9 @@ def stage_service_for(service: str, url: str | None) -> str | None:
 
 
 def normalize_stage_url(stage_service: str, url: str) -> str:
-    """Rewrite links into the form the stage steps expect.
+    """Links are opened exactly as saved.
 
-    Apple Music album links with ``?i=<track>`` open the whole album, where Play starts
-    track one; the ``/song/<id>`` page plays just the selected track.
+    (Apple Music album links with ``?i=<track>`` already open that track's song page,
+    so rewriting them is unnecessary.)
     """
-    if stage_service != "apple_music":
-        return url
-    parsed = urlparse(url)
-    track_id = (parse_qs(parsed.query).get("i") or [""])[0]
-    parts = [part for part in parsed.path.split("/") if part]
-    if track_id.isdigit() and len(parts) >= 2 and parts[1] == "album":
-        return f"https://music.apple.com/{parts[0]}/song/{track_id}"
     return url

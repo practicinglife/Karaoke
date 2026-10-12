@@ -46,6 +46,7 @@ class KaraokeTickerGUI(ctk.CTk):
         self.server_thread = None
 
         self._build_ui()
+        self.protocol("WM_DELETE_WINDOW", self.exit_app)
         self._refresh_state()
         self._schedule_status_refresh()
         self.after(350, self._run_first_launch_setup)
@@ -100,7 +101,7 @@ class KaraokeTickerGUI(ctk.CTk):
             ("BACKUP USER DATA", self.backup_user_data),
             ("IMPORT USER DATA", self.import_user_data),
             ("SETTINGS", self.open_settings_dialog),
-            ("EXIT", self.destroy),
+            ("EXIT", self.exit_app),
         ]
         for idx, (label, command) in enumerate(buttons):
             ctk.CTkButton(btns, text=label, command=command, height=42).grid(
@@ -281,6 +282,14 @@ class KaraokeTickerGUI(ctk.CTk):
 
     def close_stage(self) -> None:
         self.runtime_state.stage.close()
+
+    def exit_app(self) -> None:
+        # Let the stage Edge shut down normally so it keeps its sign-ins.
+        try:
+            self.runtime_state.stage.close(wait_seconds=20)
+        except Exception:
+            logger.exception("Could not close the stage window")
+        self.destroy()
 
     def backup_user_data(self) -> None:
         try:

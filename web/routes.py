@@ -74,6 +74,7 @@ from stage.plans import stage_service_for
 
 logger = logging.getLogger(__name__)
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".wmv"}
+RECENT_LIMIT = 8
 TEACHABLE_SERVICES = {"youtube", "youtube_music", "spotify", "apple_music"}
 FILLER_EXTENSIONS = {".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac"}
 MAX_FILLER_TRACKS = 2000
@@ -120,6 +121,13 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             upcoming_count = int(get_setting(db, "ticker_upcoming_count") or "5")
             now = qm.now_playing(current.id)
             ordered = qm.ordered_up_next(current.id, rotation)
+            recent = db.scalars(
+                select(QueueItem)
+                .options(joinedload(QueueItem.user), joinedload(QueueItem.song))
+                .where(QueueItem.session_id == current.id, QueueItem.status.in_([COMPLETED, SKIPPED]))
+                .order_by(QueueItem.updated_at.desc())
+                .limit(RECENT_LIMIT)
+            ).all()
             return {
                 "running": True,
                 "house_code": current.house_code,
@@ -127,6 +135,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                 "now_playing": serialize_item(now) if now else None,
                 "up_next": [serialize_item(i) for i in ordered[:upcoming_count]],
                 "queue_all": [serialize_item(i) for i in ordered],
+                "recent": [serialize_item(i) for i in recent],
             }
 
     def serialize_item(item: QueueItem | None) -> dict[str, Any] | None:
@@ -1363,7 +1372,8 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             rotation = get_setting(db, "singer_rotation_on") == "1"
             playback_mode = get_playback_mode(db)
             external_app_path = get_external_application_path(db)
-            stage_enabled = get_setting(db, "stage_enabled") == "1"
+            # The stage is used when it's enabled in Settings or its window is open.
+            stage_enabled = get_setting(db, "stage_enabled") == "1" or stage.driver.is_running
             if action == "next":
                 if stage_enabled and stage.state != IDLE:
                     stage_next = True

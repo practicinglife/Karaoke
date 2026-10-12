@@ -49,7 +49,7 @@
     "watch_clicks": [],
     "steps": [
       {"wait_playing": 4000},
-      {"click": ["button[data-testid='click-action'][aria-label='Play']", "button.play-button", "role=button[name='Play']"], "when": "paused", "optional": true, "timeout": 10000},
+      {"click": ["button[data-testid='click-action'][aria-label='Play']"], "when": "paused", "optional": true, "timeout": 10000},
       {"wait_playing": 10000},
       {"click": ["button[data-testid='lyrics-button']", "button.lyrics-button", "role=button[name=/lyrics/i]"], "optional": true, "timeout": 6000},
       {"click": ["button[data-testid='lyrics-fullscreen-button']", "role=button[name=/full ?screen|expand|maximi[sz]e/i]"], "unless": "fullscreen", "optional": true, "timeout": 4000}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -33,7 +34,7 @@ class FakeDriver:
     def play(self, play_id: int, service: str, url: str) -> None:
         self.calls.append(("play", play_id, service, url))
 
-    def close(self) -> None:
+    def close(self, wait_seconds: float = 0.0) -> None:
         self.is_running = False
 
     def test_selectors(self, timeout: float = 20.0) -> dict[str, Any]:
@@ -236,11 +237,8 @@ def test_service_mapping_and_url_normalization() -> None:
     assert stage_service_for("spotify", "https://open.spotify.com/track/x") == "spotify"
     assert stage_service_for("traditional", None) == "traditional"
     assert stage_service_for("youtube", None) is None
-    assert (
-        normalize_stage_url("apple_music", "https://music.apple.com/us/album/some-album/111?i=222")
-        == "https://music.apple.com/us/song/222"
-    )
-    assert normalize_stage_url("apple_music", "https://music.apple.com/us/song/222") == "https://music.apple.com/us/song/222"
+    album_link = "https://music.apple.com/us/album/some-album/111?i=222"
+    assert normalize_stage_url("apple_music", album_link) == album_link
 
 
 def test_open_places_window_on_chosen_monitor_and_move_saves_setting(app, client, stage) -> None:
@@ -276,7 +274,7 @@ def test_teach_records_and_saves_steps_for_service(app, client, stage, tmp_path,
     response = post("teach_start", service="apple_music", url="https://music.apple.com/us/album/a/1?i=2")
     assert response.status_code == 200
     assert stage.state == TEACHING
-    assert stage.driver.calls[-1] == ("teach_start", "apple_music", "https://music.apple.com/us/song/2", (0, 0, 1920, 1080))
+    assert stage.driver.calls[-1] == ("teach_start", "apple_music", "https://music.apple.com/us/album/a/1?i=2", (0, 0, 1920, 1080))
     assert stage.snapshot()["teach"] == {"service": "apple_music", "steps": ["Click 'Lyrics'"]}
 
     saved = post("teach_save").get_json()
@@ -306,3 +304,44 @@ def test_overrides_merge_per_service(tmp_path) -> None:
     assert merged["spotify"]["steps"] == [{"press": "f"}]
     assert merged["spotify"]["hosts"] == ["open.spotify.com"]
     assert merged["youtube"]["steps"] == load_selectors(overrides=tmp_path / "missing.json")["youtube"]["steps"]
+
+
+def test_recently_played_can_be_played_again_on_open_stage_even_if_setting_off(app, client, stage) -> None:
+    with app.runtime_state.db.session_scope() as db:
+        set_setting(db, "stage_enabled", "0")
+    item_id, _ = _queue(app, "Alice")
+    stage.open()  # window open, Settings checkbox off
+    stage.start_item(item_id)
+    stage.song_finished()
+    assert _status(app, item_id) == COMPLETED
+
+    token = _token(app)
+    recent = client.get("/api/queue", headers={"X-Admin-Token": token}).get_json()["recent"]
+    assert [r["id"] for r in recent] == [item_id]
+
+    response = client.post(
+        "/admin/action",
+        data={"csrf_token": _csrf(client), "action": "play", "queue_item_id": str(item_id)},
+        headers={"X-Admin-Token": token},
+    )
+    assert response.status_code == 200
+    assert stage.state == STARTING
+    assert _status(app, item_id) == NOW_PLAYING
+
+
+def test_preview_clip_ending_is_reported_not_treated_as_song_end(monkeypatch) -> None:
+    from stage.browser import StageBrowser
+
+    events: list[tuple] = []
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: events.append(e))
+    browser._watch = {"play_id": 7, "service": "apple_music", "spec": {}, "deadline": 0, "started": True, "attention": False}
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"started": True, "ended": True, "duration": 30.0, "position": 30.0})
+    monkeypatch.setattr(browser, "_first_visible", lambda page, selectors: None)
+    browser._poll(page=None)
+    assert events and events[0][0] == "attention" and "preview" in events[0][2]
+
+    events.clear()
+    browser._watch = {"play_id": 8, "service": "apple_music", "spec": {}, "deadline": 0, "started": True, "attention": False}
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"started": True, "ended": True, "duration": 241.0, "position": 241.0})
+    browser._poll(page=None)
+    assert events == [("ended", 8, "")]
