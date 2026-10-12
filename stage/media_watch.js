@@ -59,6 +59,9 @@
       duration: best && Number.isFinite(best.duration) ? best.duration : 0,
       // Window fullscreen (set by the app) doesn't set fullscreenElement; only the page's own player does.
       fullscreen: Boolean(document.fullscreenElement),
+      // Track title the site reports to the OS media controls. Players that roll straight
+      // into the next track (Apple Music albums) never fire 'ended'; the title changes instead.
+      title: (navigator.mediaSession && navigator.mediaSession.metadata && navigator.mediaSession.metadata.title) || "",
     };
   };
 })();

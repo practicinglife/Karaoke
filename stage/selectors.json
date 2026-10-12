@@ -5,6 +5,7 @@
     "Selectors are Playwright selectors (CSS, or role=button[name=/lyrics/i]); the first visible match in each list is used.",
     "Step types: click (optionally only 'when': 'paused'), press (a key, optionally after focusing an element), wait_playing (ms), wait (ms).",
     "'unless' skips a step when the player is already fullscreen (fullscreen buttons and keys toggle): a CSS selector that matches only in fullscreen, or 'fullscreen' for any element other than the whole page.",
+    "'{track_id}' in a selector is the track id from the song link (Apple Music '?i='); 'requires' / 'requires_not': 'track_id' run a step only when the link does / doesn't name a track.",
     "'optional': true means a missing button is not an error. 'busy' selectors mark an ad/interstitial so its end is not treated as the song ending.",
     "'watch_clicks' are clicked whenever they appear during playback (skip-ad buttons, 'still watching?' prompts).",
     "Use 'Test selectors' on the admin page while a song is on the stage screen to see which selectors currently match."
@@ -49,10 +50,11 @@
     "watch_clicks": [],
     "steps": [
       {"wait_playing": 4000},
-      {"click": ["button[data-testid='click-action'][aria-label='Play']"], "when": "paused", "optional": true, "timeout": 10000},
+      {"click": ["[data-testid='track-list-item']:has(a[href$='/{track_id}']) button[data-testid='play-button']", ".songs-list-row__song-container:has(a[href$='/{track_id}']) button[data-testid='play-button']"], "requires": "track_id", "when": "paused", "optional": true, "timeout": 10000},
+      {"click": ["button[data-testid='click-action'][aria-label='Play']"], "requires_not": "track_id", "when": "paused", "optional": true, "timeout": 10000},
       {"wait_playing": 10000},
-      {"click": ["button[data-testid='lyrics-button']", "button.lyrics-button", "role=button[name=/lyrics/i]"], "optional": true, "timeout": 6000},
-      {"click": ["button[data-testid='lyrics-fullscreen-button']", "role=button[name=/full ?screen|expand|maximi[sz]e/i]"], "unless": "fullscreen", "optional": true, "timeout": 4000}
+      {"click": ["button[data-testid='lyrics-button']"], "unless": "[data-testid='lyrics-sidebar']", "optional": true, "timeout": 6000},
+      {"click": ["button[data-testid='lyrics-fullscreen-button']"], "unless": "fullscreen", "optional": true, "timeout": 6000}
     ]
   },
   "traditional": {

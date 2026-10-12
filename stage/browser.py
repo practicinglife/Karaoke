@@ -28,7 +28,7 @@ import time
 from concurrent.futures import Future
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from .plans import load_selectors
 
@@ -144,6 +144,43 @@ def disable_background_mode(profile_dir: Path) -> None:
         local_state.write_text(json.dumps(data), encoding="utf-8")
     except OSError:
         logger.warning("Could not turn off Edge background mode for the stage profile")
+
+
+def resolve_spec(spec: dict[str, Any], params: dict[str, str]) -> dict[str, Any]:
+    """Fill ``{track_id}``-style placeholders from the song link and drop steps that don't apply.
+
+    A step with ``"requires": "track_id"`` only runs when the link names a track (Apple Music
+    ``?i=``); ``"requires_not": "track_id"`` only when it doesn't. Selectors whose placeholder
+    has no value are dropped.
+    """
+
+    def fill(selectors: list[str]) -> list[str]:
+        out = []
+        for selector in selectors:
+            try:
+                filled = selector.format(**params)
+            except (KeyError, IndexError, ValueError):
+                filled = selector
+            if all(params.get(name) or f"{{{name}}}" not in selector for name in params):
+                out.append(filled)
+        return out
+
+    steps = []
+    for step in spec.get("steps", []):
+        if step.get("requires") and not params.get(step["requires"]):
+            continue
+        if step.get("requires_not") and params.get(step["requires_not"]):
+            continue
+        step = dict(step)
+        for key in ("click", "focus"):
+            if key in step:
+                step[key] = fill(step[key])
+        if isinstance(step.get("unless"), str) and step["unless"] != "fullscreen":
+            step["unless"] = (fill([step["unless"]]) or [""])[0]
+        if "click" in step and not step["click"]:
+            continue
+        steps.append(step)
+    return {**spec, "steps": steps}
 
 
 def _free_port() -> int:
@@ -387,7 +424,8 @@ class StageBrowser:
     # ----- playing songs -----------------------------------------------------------
 
     def _start_play(self, page, play_id: int, service: str, url: str) -> None:
-        spec = load_selectors(self.selectors_path).get(service, {})
+        params = {"track_id": (parse_qs(urlparse(url).query).get("i") or [""])[0]}
+        spec = resolve_spec(load_selectors(self.selectors_path).get(service, {}), params)
         self._watch = {
             "play_id": play_id,
             "service": service,
@@ -395,6 +433,7 @@ class StageBrowser:
             "deadline": time.monotonic() + START_TIMEOUT_SECONDS,
             "started": False,
             "attention": False,
+            "title": "",
         }
         self._goto(page, url)
         page.evaluate(
@@ -468,6 +507,19 @@ class StageBrowser:
             self.on_event("attention", watch["play_id"], "Song did not start. Press play in the stage window.")
         duration = float(state.get("duration") or 0)
         near_end = duration > 5 and float(state.get("position") or 0) >= duration - 0.75 and not state.get("playing")
+        # Remember the singer's track title once it's playing; if the site rolls on to a
+        # different track (album/autoplay), the singer's song is over.
+        title = str(state.get("title") or "")
+        track_changed = False
+        if watch["started"] and title and not busy:
+            if not watch["title"] and state.get("playing"):
+                watch["title"] = title
+            elif watch["title"] and title != watch["title"]:
+                track_changed = True
+        if track_changed:
+            self._watch = None
+            self.on_event("ended", watch["play_id"], "")
+            return
         if watch["started"] and not busy and (state.get("ended") or near_end):
             self._watch = None
             if 0 < duration <= PREVIEW_SECONDS and watch.get("service") in PREVIEW_SERVICES:

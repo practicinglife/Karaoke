@@ -380,3 +380,40 @@ def test_mic_stand_page_and_button(app, client, stage) -> None:
     assert response.status_code == 200
     assert stage.state == STARTING
     assert stage.snapshot()["now"]["user"] == "Bob"
+
+
+def test_apple_steps_target_the_linked_track_row() -> None:
+    from stage.browser import resolve_spec
+
+    spec = load_selectors(overrides=Path("missing.json"))["apple_music"]
+    with_track = resolve_spec(spec, {"track_id": "305517585"})
+    clicks = [s["click"] for s in with_track["steps"] if "click" in s]
+    assert "a[href$='/305517585']" in clicks[0][0]          # the highlighted track's own Play
+    assert not any("click-action" in sel for sel in clicks[0])  # never the album's Play
+    assert any("lyrics-button" in sel for c in clicks for sel in c)
+    assert any("lyrics-fullscreen-button" in sel for c in clicks for sel in c)
+
+    no_track = resolve_spec(spec, {"track_id": ""})
+    first_click = [s["click"] for s in no_track["steps"] if "click" in s][0]
+    assert first_click == ["button[data-testid='click-action'][aria-label='Play']"]
+
+
+def test_track_title_change_counts_as_song_end(monkeypatch) -> None:
+    from stage.browser import StageBrowser
+
+    events: list[tuple] = []
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: events.append(e))
+    browser._watch = {"play_id": 3, "service": "apple_music", "spec": {}, "deadline": 1e12,
+                      "started": False, "attention": False, "title": ""}
+    monkeypatch.setattr(browser, "_first_visible", lambda page, selectors: None)
+    states = iter([
+        {"started": True, "playing": True, "title": "Pray for Rain", "duration": 240, "position": 10},
+        {"started": True, "playing": True, "title": "Pray for Rain", "duration": 240, "position": 120},
+        {"started": True, "playing": True, "title": "Kristi Don't Care", "duration": 200, "position": 1},
+    ])
+    monkeypatch.setattr(browser, "_media_state", lambda page: next(states))
+    browser._poll(None)
+    browser._poll(None)
+    assert [e[0] for e in events] == ["started"]
+    browser._poll(None)
+    assert events[-1] == ("ended", 3, "")
