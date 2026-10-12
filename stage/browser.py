@@ -126,6 +126,39 @@ def wait_for_exit(profile_dir: Path, seconds: float = 15.0) -> bool:
     return False
 
 
+def _merge_json_file(path: Path, updates: dict[str, Any]) -> None:
+    """Deep-merge settings into one of Edge's JSON settings files (Edge must be closed)."""
+
+    def merge(target: dict, source: dict) -> None:
+        for key, value in source.items():
+            if isinstance(value, dict) and isinstance(target.get(key), dict):
+                merge(target[key], value)
+            else:
+                target[key] = value
+
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, ValueError):
+        return  # don't risk damaging a file Edge owns
+    if not isinstance(data, dict):
+        return
+    merge(data, updates)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    except OSError:
+        logger.warning("Could not update stage browser settings in %s", path)
+
+
+def quiet_stage_prompts(profile_dir: Path) -> None:
+    """Turn off Edge's "Translate this page?" popup in the stage profile.
+
+    ("Open the Spotify app?" can't be switched off per profile; media_watch.js stops pages
+    from asking instead.)
+    """
+    _merge_json_file(Path(profile_dir) / "Default" / "Preferences", {"translate": {"enabled": False}})
+
+
 def disable_background_mode(profile_dir: Path) -> None:
     """Stop Edge lingering in the background after its window closes (stage profile only).
 
@@ -290,6 +323,7 @@ class StageBrowser:
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         close_leftover_windows(self.profile_dir)
         disable_background_mode(self.profile_dir)
+        quiet_stage_prompts(self.profile_dir)
         subprocess.Popen(
             [
                 executable,
@@ -565,6 +599,11 @@ class StageBrowser:
         while teach["pending"] and (force or time.monotonic() - teach["pending"][0]["at"] >= TEACH_SETTLE_SECONDS):
             event = teach["pending"].pop(0)
             state = self._media_state(page)
+            # If the host clicked again quickly, judge this click's effect by the page state
+            # captured at the next click, so the effect of a later click isn't credited to it.
+            following = teach["pending"][0] if teach["pending"] else None
+            if following is not None:
+                state = {**state, "playing": following.get("wasPlaying"), "fullscreen": following.get("wasFullscreen")}
             if event.get("type") == "click" and event.get("selectors"):
                 step: dict[str, Any] = {"click": event["selectors"], "optional": True, "timeout": 8000}
                 label = f"Click '{event.get('label', '')}'"

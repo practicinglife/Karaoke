@@ -5,6 +5,43 @@
   if (window.__ktState) {
     return;
   }
+  // Never let a page hand off to a desktop app (spotify:, music:, itms...): Edge would put an
+  // "Open Spotify?" popup on the TV that nobody can dismiss from the mic stand.
+  const WEB_SCHEMES = new Set(["http:", "https:", "about:", "blob:", "data:", "javascript:", "mailto:"]);
+  const isAppLink = (value) => {
+    try {
+      return !WEB_SCHEMES.has(new URL(String(value), location.href).protocol);
+    } catch (_error) {
+      return false;
+    }
+  };
+  if (window.navigation) {
+    window.navigation.addEventListener("navigate", (event) => {
+      if (isAppLink(event.destination.url) && event.cancelable) event.preventDefault();
+    });
+  }
+  document.addEventListener(
+    "click",
+    (event) => {
+      const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+      if (link && isAppLink(link.href)) event.preventDefault();
+    },
+    true
+  );
+  const originalOpen = window.open;
+  window.open = function (url, ...rest) {
+    return url && isAppLink(url) ? null : originalOpen.call(this, url, ...rest);
+  };
+  const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, "src");
+  if (srcDescriptor && srcDescriptor.set) {
+    Object.defineProperty(HTMLIFrameElement.prototype, "src", {
+      ...srcDescriptor,
+      set(value) {
+        if (!isAppLink(value)) srcDescriptor.set.call(this, value);
+      },
+    });
+  }
+
   const tracked = new Set();
   const flags = { started: false, ended: false };
 

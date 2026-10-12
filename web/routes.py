@@ -70,7 +70,7 @@ from karaoke.utils import is_path_under
 from stage import create_stage_controller
 from stage.controller import EXPIRY_ACTIONS, IDLE
 from stage.monitors import describe_monitors
-from stage.plans import stage_service_for
+from stage.plans import stage_service_for, taught_services
 
 logger = logging.getLogger(__name__)
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".wmv"}
@@ -1147,6 +1147,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             return render_template(
                 "admin.html",
                 mic_url=mic_url,
+                taught_services=taught_services(),
                 monitors=describe_monitors(),
                 stage_monitor=stage_monitor,
                 now_playing=now_playing,

@@ -417,3 +417,30 @@ def test_track_title_change_counts_as_song_end(monkeypatch) -> None:
     assert [e[0] for e in events] == ["started"]
     browser._poll(None)
     assert events[-1] == ("ended", 3, "")
+
+
+def test_quick_clicks_credit_fullscreen_only_to_the_click_that_caused_it(monkeypatch) -> None:
+    from stage.browser import StageBrowser
+
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: None)
+    browser._teach = {"service": "spotify", "host": "open.spotify.com", "steps": [], "labels": [], "pending": [
+        {"type": "click", "selectors": ["button:has-text('Show more')"], "label": "Show more",
+         "wasPlaying": True, "wasFullscreen": False, "at": 0},
+        {"type": "click", "selectors": ["button[aria-label='Enter full screen']"], "label": "Enter full screen",
+         "wasPlaying": True, "wasFullscreen": False, "at": 0},
+    ]}
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"playing": True, "fullscreen": True})
+    browser._settle_teach_events(page=None, force=True)
+    show_more, enter_fullscreen = browser._teach["steps"]
+    assert "unless" not in show_more
+    assert enter_fullscreen["unless"] == "fullscreen"
+
+
+def test_admin_lists_taught_services(app, client, stage, tmp_path, monkeypatch) -> None:
+    overrides = tmp_path / "stage_selectors.json"
+    monkeypatch.setattr(plans, "overrides_path", lambda: overrides)
+    page = client.get(f"/admin?token={_token(app)}")
+    assert b"No services taught yet" in page.data
+    save_taught_steps("spotify", [{"wait_playing": 6000}, {"click": ["x"]}], overrides=overrides)
+    page = client.get(f"/admin?token={_token(app)}")
+    assert b"Spotify: 2 steps" in page.data

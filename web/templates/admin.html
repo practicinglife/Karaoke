@@ -63,6 +63,16 @@
 
       <h3>Teach a service</h3>
       <p>Open a song, then do exactly what you would do by hand (play, lyrics, maximize, full screen). The app records your clicks and repeats them for every song from that service.</p>
+      {% if taught_services %}
+      <p><strong>Taught on this computer</strong> (replayed automatically whenever a song from that service plays):</p>
+      <ul>
+        {% for t in taught_services %}
+        <li>{{ t.name }}: {{ t.steps }} steps</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>No services taught yet; built-in steps are used.</p>
+      {% endif %}
       <label for="teach-service">Service</label>
       <select id="teach-service">
         <option value="apple_music">Apple Music</option>

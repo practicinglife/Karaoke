@@ -46,6 +46,25 @@ def save_taught_steps(service: str, steps: list[dict[str, Any]], overrides: Path
     return target
 
 
+SERVICE_NAMES = {
+    "apple_music": "Apple Music",
+    "spotify": "Spotify",
+    "youtube": "YouTube",
+    "youtube_music": "YouTube Music",
+    "traditional": "Traditional karaoke",
+}
+
+
+def taught_services(overrides: Path | None = None) -> list[dict[str, Any]]:
+    """Services with Teach-mode steps on this computer (these replay automatically)."""
+    data = _read_json(overrides or overrides_path())
+    return [
+        {"service": key, "name": SERVICE_NAMES.get(key, key), "steps": len(value.get("steps", []))}
+        for key, value in sorted(data.items())
+        if isinstance(value, dict) and value.get("steps")
+    ]
+
+
 def forget_taught_steps(service: str, overrides: Path | None = None) -> None:
     """Go back to the built-in steps for a service."""
     target = overrides or overrides_path()

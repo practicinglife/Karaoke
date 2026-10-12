@@ -10,7 +10,9 @@
 
   const CLICKABLE = "button, a, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], input, [tabindex]";
   const quote = (value) => JSON.stringify(String(value));
-  const looksGenerated = (value) => /\d{3,}|[a-f0-9]{8,}|^:/.test(value);
+  // Build-generated names (hashes) change on every site update, so they make poor selectors.
+  const looksGenerated = (value) =>
+    /\d{3,}|[a-f0-9]{8,}|^:/.test(value) || (/^[A-Za-z0-9_]{12,}$/.test(value) && /[a-z]/.test(value) && /[A-Z]/.test(value));
 
   function shortText(el) {
     const text = (el.innerText || el.textContent || "").trim().replace(/\s+/g, " ");
@@ -89,6 +91,8 @@
     (event) => {
       if (!event.isTrusted || event.repeat) return;
       if (["Shift", "Control", "Alt", "Meta"].includes(event.key)) return;
+      // The app manages the window's fullscreen itself; replaying these would fight it.
+      if (["F11", "Escape"].includes(event.key)) return;
       const active = document.activeElement;
       if (active && (active.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName))) return;
       send({
