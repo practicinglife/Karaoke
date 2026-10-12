@@ -31,8 +31,9 @@ class FakeDriver:
     def show(self, url: str) -> None:
         self.calls.append(("show", url))
 
-    def play(self, play_id: int, service: str, url: str) -> None:
+    def play(self, play_id: int, service: str, url: str, automate: bool = True) -> None:
         self.calls.append(("play", play_id, service, url))
+        self.automate = automate
 
     def close(self, wait_seconds: float = 0.0) -> None:
         self.is_running = False
@@ -395,7 +396,8 @@ def test_apple_steps_target_the_linked_track_row() -> None:
 
     no_track = resolve_spec(spec, {"track_id": ""})
     first_click = [s["click"] for s in no_track["steps"] if "click" in s][0]
-    assert first_click == ["button[data-testid='click-action'][aria-label='Play']"]
+    assert first_click[0] == "button[data-testid='click-action'][aria-label='Play']"
+    assert all("Shuffle" in sel or "aria-label='Play'" in sel for sel in first_click)  # never Shuffle
 
 
 def test_track_title_change_counts_as_song_end(monkeypatch) -> None:
@@ -444,3 +446,64 @@ def test_admin_lists_taught_services(app, client, stage, tmp_path, monkeypatch) 
     save_taught_steps("spotify", [{"wait_playing": 6000}, {"click": ["x"]}], overrides=overrides)
     page = client.get(f"/admin?token={_token(app)}")
     assert b"Spotify: 2 steps" in page.data
+
+
+def test_apple_song_page_link_opens_album_with_track_highlighted() -> None:
+    from stage.plans import apple_album_link
+
+    page = '<a href="https://music.apple.com/us/album/winning-streak/1772965592?i=1772965597">x</a>'
+    song = "https://music.apple.com/us/song/winning-streak/1772965597"
+    assert apple_album_link(song, fetch=lambda url: page) == "https://music.apple.com/us/album/winning-streak/1772965592?i=1772965597"
+    album = "https://music.apple.com/us/album/pray-for-rain/305517559?i=305517585"
+    assert apple_album_link(album, fetch=lambda url: 1 / 0) == album  # album links are left alone
+
+    def offline(url):
+        raise OSError("no network")
+
+    other = "https://music.apple.com/us/song/other/999"
+    assert apple_album_link(other, fetch=offline) == other  # falls back to the saved link
+
+
+def test_host_clicking_during_a_song_takes_over_from_the_automation(monkeypatch) -> None:
+    import time as _time
+
+    from stage.browser import StageBrowser
+
+    events: list[tuple] = []
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: events.append(e))
+    browser._watch = {"play_id": 5, "service": "apple_music", "spec": {}, "deadline": 0,
+                      "started": True, "attention": False, "title": "Winning Streak", "manual": False}
+
+    browser._last_automation = _time.monotonic()
+    browser._on_record({}, {"type": "click"})  # the app's own click: ignored
+    assert browser._watch["manual"] is False and events == []
+
+    browser._last_automation = _time.monotonic() - 10
+    browser._on_record({}, {"type": "click"})  # the host's click
+    assert browser._watch["manual"] is True and browser._watch["title"] == ""
+    assert events[0][0] == "manual"
+    assert browser._run_steps(page=None, spec={"steps": [{"click": ["x"]}]}) == ""  # remaining steps skipped
+
+
+def test_manual_mode_switch_is_passed_to_the_stage(app, client, stage) -> None:
+    item_id, _ = _queue(app, "Alice")
+    response = client.post(
+        "/admin/stage",
+        data={"csrf_token": _csrf(client), "action": "toggle_auto_steps"},
+        headers={"X-Admin-Token": _token(app)},
+    )
+    assert response.get_json()["stage"]["auto_steps"] is False
+    stage.start_item(item_id)
+    assert stage.driver.automate is False
+
+
+def test_settings_page_reports_intermission_music(app, client, stage, tmp_path) -> None:
+    token = _token(app)
+    assert b"No intermission folder set" in client.get(f"/settings?token={token}").data
+    folder = tmp_path / "Break Music"
+    folder.mkdir()
+    (folder / "a.mp3").write_bytes(b"x")
+    (folder / "b.m4a").write_bytes(b"x")
+    with app.runtime_state.db.session_scope() as db:
+        set_setting(db, "intermission_folder", str(folder))
+    assert b"2 songs found" in client.get(f"/settings?token={token}").data

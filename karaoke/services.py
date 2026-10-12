@@ -42,6 +42,7 @@ SETTING_KEYS = {
     "countdown_expiry_action",
     "ready_hotkey",
     "stage_button_secret",
+    "stage_auto_steps",
 }
 
 
@@ -67,6 +68,7 @@ DEFAULT_SETTINGS = {
     "countdown_expiry_action": "wait",
     "ready_hotkey": "f9",
     "stage_button_secret": "",
+    "stage_auto_steps": "1",
 }
 
 

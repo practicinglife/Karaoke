@@ -29,6 +29,8 @@ function renderStageStatus(stage) {
   stageStateEl.textContent = stage.browser_running ? stage.state : "CLOSED";
   const next = stage.next;
   stageNextEl.textContent = stage.state === "INTERMISSION" && next ? `— waiting for ${next.user} (${next.song})` : "";
+  const autoToggle = document.getElementById("stage-auto-toggle");
+  if (autoToggle) autoToggle.textContent = stage.auto_steps === false ? "AUTOMATIC STEPS: OFF (MANUAL)" : "AUTOMATIC STEPS: ON";
   stageMessageEl.textContent = stage.message || "";
   stageMessageEl.hidden = !stage.message;
   if (teachStepsEl) {

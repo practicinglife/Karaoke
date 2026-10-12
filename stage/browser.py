@@ -42,6 +42,8 @@ POLL_SECONDS = 1.0
 PUMP_MS = 200
 TEACH_SETTLE_SECONDS = 1.5
 PREVIEW_SECONDS = 35.0
+# Clicks/keys arriving this soon after one of the app's own actions are the app's.
+AUTOMATION_GRACE_SECONDS = 1.5
 PREVIEW_SERVICES = {"apple_music", "spotify"}
 
 EventCallback = Callable[[str, int, str], None]
@@ -241,6 +243,7 @@ class StageBrowser:
         self._thread: threading.Thread | None = None
         self._watch: dict[str, Any] | None = None
         self._teach: dict[str, Any] | None = None
+        self._last_automation = 0.0
         self._window_bounds: dict[str, Any] = {}
 
     # ----- public API (any thread) -------------------------------------------------
@@ -273,9 +276,9 @@ class StageBrowser:
         """Load a page with no song tracking (intermission screen, sign-in page)."""
         self._commands.put(("show", (url,), None))
 
-    def play(self, play_id: int, service: str, url: str) -> None:
-        """Load a song page, run that service's steps, then watch for the song to end."""
-        self._commands.put(("play", (play_id, service, url), None))
+    def play(self, play_id: int, service: str, url: str, automate: bool = True) -> None:
+        """Load a song page, run that service's steps (unless manual), then watch for the end."""
+        self._commands.put(("play", (play_id, service, url, automate), None))
 
     def test_selectors(self, timeout: float = 20.0) -> dict[str, Any]:
         """Report which selectors match on the page currently shown."""
@@ -457,9 +460,12 @@ class StageBrowser:
 
     # ----- playing songs -----------------------------------------------------------
 
-    def _start_play(self, page, play_id: int, service: str, url: str) -> None:
+    def _start_play(self, page, play_id: int, service: str, url: str, automate: bool = True) -> None:
         params = {"track_id": (parse_qs(urlparse(url).query).get("i") or [""])[0]}
         spec = resolve_spec(load_selectors(self.selectors_path).get(service, {}), params)
+        if not automate:
+            # Manual mode: just open the song; the host presses play/lyrics/full screen.
+            spec = {**spec, "steps": [], "watch_clicks": []}
         self._watch = {
             "play_id": play_id,
             "service": service,
@@ -468,6 +474,7 @@ class StageBrowser:
             "started": False,
             "attention": False,
             "title": "",
+            "manual": not automate,
         }
         self._goto(page, url)
         page.evaluate(
@@ -484,6 +491,8 @@ class StageBrowser:
         for step in spec.get("steps", []):
             if not self._commands.empty():
                 return ""  # superseded by a newer command
+            if self._watch and self._watch.get("manual"):
+                return ""  # the host took over this song by hand
             # Fullscreen buttons/keys toggle, so never press them when already fullscreen.
             if step.get("unless"):
                 if self._is_fullscreen(page, step["unless"]):
@@ -510,7 +519,9 @@ class StageBrowser:
                 target = self._first_visible(page, step.get("focus") or [])
                 if target is not None:
                     target.focus()
+                self._last_automation = time.monotonic()
                 page.keyboard.press(step["press"])
+                self._last_automation = time.monotonic()
             if step.get("unless"):
                 # Sites apply fullscreen asynchronously; wait so a following fallback
                 # toggle doesn't see "not yet fullscreen" and switch it straight back off.
@@ -524,11 +535,13 @@ class StageBrowser:
         if not watch:
             return
         spec = watch["spec"]
-        for selector in spec.get("watch_clicks", []):
+        for selector in [] if watch.get("manual") else spec.get("watch_clicks", []):
             target = self._first_visible(page, [selector])
             if target is not None:
                 try:
+                    self._last_automation = time.monotonic()
                     target.click(timeout=2000)
+                    self._last_automation = time.monotonic()
                 except Exception:
                     pass
         state = self._media_state(page)
@@ -536,7 +549,7 @@ class StageBrowser:
         if state.get("started") and not watch["started"]:
             watch["started"] = True
             self.on_event("started", watch["play_id"], "")
-        if not watch["started"] and not watch["attention"] and time.monotonic() > watch["deadline"]:
+        if not watch["started"] and not watch["attention"] and not watch.get("manual") and time.monotonic() > watch["deadline"]:
             watch["attention"] = True
             self.on_event("attention", watch["play_id"], "Song did not start. Press play in the stage window.")
         duration = float(state.get("duration") or 0)
@@ -582,7 +595,10 @@ class StageBrowser:
 
     def _on_record(self, source: dict[str, Any], payload: dict[str, Any]) -> None:
         teach = self._teach
-        if not teach or not isinstance(payload, dict):
+        if not teach:
+            self._on_host_action()
+            return
+        if not isinstance(payload, dict):
             return
         frame = source.get("frame")
         host = (urlparse(frame.url).hostname or "").lower() if frame is not None else ""
@@ -590,6 +606,21 @@ class StageBrowser:
             return  # e.g. a sign-in popup on another site
         payload["at"] = time.monotonic()
         teach["pending"].append(payload)
+
+    def _on_host_action(self) -> None:
+        """The host clicked or typed in the stage window during a song: stop fighting them.
+
+        The app's remaining steps for this song are skipped, and whatever track the host
+        ends up playing becomes the song to watch (so changing track by hand isn't taken as
+        the singer's song ending).
+        """
+        watch = self._watch
+        if not watch or time.monotonic() - self._last_automation < AUTOMATION_GRACE_SECONDS:
+            return  # not during a song, or it's the app's own click
+        watch["title"] = ""
+        if not watch.get("manual"):
+            watch["manual"] = True
+            self.on_event("manual", watch["play_id"], "You took over this song; the app will follow what you play.")
 
     def _settle_teach_events(self, page, force: bool = False) -> None:
         """Turn recorded events into steps once their effect (playing/fullscreen) is visible."""
@@ -673,7 +704,9 @@ class StageBrowser:
             target = self._first_visible(page, selectors)
             if target is not None:
                 try:
+                    self._last_automation = time.monotonic()
                     target.click(timeout=3000)
+                    self._last_automation = time.monotonic()
                     return True
                 except Exception:
                     pass

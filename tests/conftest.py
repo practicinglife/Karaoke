@@ -35,7 +35,7 @@ class NullStageDriver:
     def show(self, url: str) -> None:
         self.calls.append(("show", url))
 
-    def play(self, play_id: int, service: str, url: str) -> None:
+    def play(self, play_id: int, service: str, url: str, automate: bool = True) -> None:
         self.calls.append(("play", play_id, service, url))
 
     def close(self, wait_seconds: float = 0.0) -> None:

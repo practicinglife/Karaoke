@@ -47,7 +47,7 @@ class StageDriver(Protocol):
     def teach_status(self) -> list[str]: ...
     def teach_stop(self, timeout: float = 20.0) -> list[dict[str, Any]]: ...
     def show(self, url: str) -> None: ...
-    def play(self, play_id: int, service: str, url: str) -> None: ...
+    def play(self, play_id: int, service: str, url: str, automate: bool = True) -> None: ...
     def close(self, wait_seconds: float = 0.0) -> None: ...
     def test_selectors(self, timeout: float = 20.0) -> dict[str, Any]: ...
 
@@ -152,7 +152,7 @@ class StageController:
             self.message = ""
             self.countdown_ends_at = None
             self._last_start = self.clock()
-            self.driver.play(self.play_id, *plan)
+            self.driver.play(self.play_id, *plan, automate=self.auto_steps())
         self.emit_queue()
         self._publish()
         return True, ""
@@ -251,7 +251,7 @@ class StageController:
             if kind == "started":
                 self.state = PLAYING
                 self.message = ""
-            elif kind == "attention":
+            elif kind in ("attention", "manual"):
                 self.message = detail
         self._publish()
 
@@ -320,6 +320,7 @@ class StageController:
                 "countdown_ends_at": int(ends * 1000) if ends else None,
                 "countdown_expired": bool(ends and self.clock() >= ends),
                 "expiry_action": self._expiry_action(),
+                "auto_steps": self.auto_steps(),
                 "teach": {"service": self.teach_service, "steps": self.driver.teach_status()}
                 if self.state == TEACHING
                 else None,
@@ -392,6 +393,16 @@ class StageController:
         with self.db.session_scope() as db:
             port = get_setting(db, "web_server_port") or "8080"
         return f"http://127.0.0.1:{port}"
+
+    def auto_steps(self) -> bool:
+        """False = Manual mode: songs open on the stage, the host presses play/lyrics/full screen."""
+        with self.db.session_scope() as db:
+            return get_setting(db, "stage_auto_steps") != "0"
+
+    def set_auto_steps(self, enabled: bool) -> None:
+        with self.db.session_scope() as db:
+            set_setting(db, "stage_auto_steps", "1" if enabled else "0")
+        self._publish()
 
     def _countdown_seconds(self) -> int:
         with self.db.session_scope() as db:

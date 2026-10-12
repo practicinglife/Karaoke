@@ -51,7 +51,7 @@
     "steps": [
       {"wait_playing": 4000},
       {"click": ["[data-testid='track-list-item']:has(a[href$='/{track_id}']) button[data-testid='play-button']", ".songs-list-row__song-container:has(a[href$='/{track_id}']) button[data-testid='play-button']"], "requires": "track_id", "when": "paused", "optional": true, "timeout": 10000},
-      {"click": ["button[data-testid='click-action'][aria-label='Play']"], "requires_not": "track_id", "when": "paused", "optional": true, "timeout": 10000},
+      {"click": ["button[data-testid='click-action'][aria-label='Play']", "button[data-testid='click-action']:not([aria-label='Shuffle'])"], "requires_not": "track_id", "when": "paused", "optional": true, "timeout": 10000},
       {"wait_playing": 10000},
       {"click": ["button[data-testid='lyrics-button']"], "unless": "[data-testid='lyrics-sidebar']", "optional": true, "timeout": 6000},
       {"click": ["button[data-testid='lyrics-fullscreen-button']"], "unless": "fullscreen", "optional": true, "timeout": 6000}

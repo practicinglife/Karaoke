@@ -1515,6 +1515,8 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             ok, message = stage.singer_ready("host")
             if not ok:
                 return jsonify({"ok": False, "message": message}), 400
+        elif action == "toggle_auto_steps":
+            stage.set_auto_steps(not stage.auto_steps())
         elif action == "teach_start":
             service = request.form.get("service", "")
             url = request.form.get("url", "").strip()
@@ -1639,6 +1641,8 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             csrf_token=ensure_csrf(),
             monitors=describe_monitors(),
             stage_button_url=f"{request.host_url.rstrip('/')}{url_for('web.stage_ready_button', key=button_key)}",
+            filler_root_found=_filler_tracks()[0] is not None,
+            filler_count=len(_filler_tracks()[1]),
         )
 
     @bp.post("/settings")

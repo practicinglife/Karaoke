@@ -52,6 +52,13 @@
       <label><input type="checkbox" name="stage_fullscreen" {% if values['stage_fullscreen'] == '1' %}checked{% endif %}> Open the stage window full screen</label>
       <label>Intermission music folder</label>
       <input name="intermission_folder" value="{{ values['intermission_folder'] }}" placeholder="C:\\Music\\Intermission">
+      {% if not values['intermission_folder'] %}
+      <p class="error">No intermission folder set, so no music plays between songs.</p>
+      {% elif not filler_root_found %}
+      <p class="error">That folder was not found.</p>
+      {% else %}
+      <p class="success">{{ filler_count }} songs found ({% if filler_count == 0 %}add mp3, m4a, aac, wav, ogg or flac files{% else %}they play shuffled between singers{% endif %}).</p>
+      {% endif %}
       <label>Countdown (seconds)</label>
       <input name="countdown_seconds" value="{{ values['countdown_seconds'] }}" inputmode="numeric">
       <label>When the countdown runs out</label>

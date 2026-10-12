@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 SELECTORS_PATH = Path(__file__).resolve().parent / "selectors.json"
 STREAMING_SERVICES = {"youtube", "spotify", "apple_music"}
@@ -84,10 +86,43 @@ def stage_service_for(service: str, url: str | None) -> str | None:
     return service
 
 
-def normalize_stage_url(stage_service: str, url: str) -> str:
-    """Links are opened exactly as saved.
+_APPLE_SONG_PATH = re.compile(r"^/([a-z]{2})/song/(?:[^/]+/)?(\d+)/?$")
+_apple_album_cache: dict[str, str] = {}
 
-    (Apple Music album links with ``?i=<track>`` already open that track's song page,
-    so rewriting them is unnecessary.)
+
+def apple_album_link(url: str, fetch=None) -> str:
+    """Turn an Apple Music song-page link into its album link with the track highlighted.
+
+    Song pages (``/us/song/<name>/<id>``) have no track row to click, only a header button
+    whose label varies, while album links (``/album/<name>/<album>?i=<id>``) highlight the
+    track and give it its own Play button. The song page names its album link; if it can't
+    be fetched, the original link is used.
     """
+    parsed = urlparse(url)
+    match = _APPLE_SONG_PATH.match(parsed.path)
+    if not match:
+        return url
+    if url in _apple_album_cache:
+        return _apple_album_cache[url]
+    country, song_id = match.groups()
+    try:
+        html = (fetch or _fetch_text)(url)
+    except Exception:
+        return url
+    found = re.search(rf"https://music\.apple\.com/{country}/album/[a-z0-9-]+/\d+\?i={song_id}", html)
+    resolved = found.group(0) if found else url
+    _apple_album_cache[url] = resolved
+    return resolved
+
+
+def _fetch_text(url: str) -> str:
+    request = Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/141.0"})
+    with urlopen(request, timeout=8) as response:
+        return response.read().decode("utf-8", "ignore")
+
+
+def normalize_stage_url(stage_service: str, url: str) -> str:
+    """Links are opened as saved, except Apple Music song-page links (see apple_album_link)."""
+    if stage_service == "apple_music":
+        return apple_album_link(url)
     return url
