@@ -283,6 +283,7 @@ class BackgroundIndexer:
             self._deferred_index = True
             return
 
+        self._set_status(status="Scanning music folder...")
         self._set_progress(0.05, "Snapshot compare")
         has_changes, summary, snapshot = self._compare_and_persist_snapshot(karaoke_root, manifest_path)
         self._set_status(compare=summary)
