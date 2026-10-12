@@ -507,3 +507,24 @@ def test_settings_page_reports_intermission_music(app, client, stage, tmp_path) 
     with app.runtime_state.db.session_scope() as db:
         set_setting(db, "intermission_folder", str(folder))
     assert b"2 songs found" in client.get(f"/settings?token={token}").data
+
+
+def test_escape_and_f11_take_over_but_are_never_taught(monkeypatch) -> None:
+    import time as _time
+
+    from stage.browser import StageBrowser
+
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: None)
+    browser._teach = {"service": "youtube", "host": "", "steps": [], "labels": [], "pending": [
+        {"type": "press", "key": "Escape", "hostOnly": True, "at": 0},
+        {"type": "press", "key": "k", "hostOnly": False, "at": 0},
+    ]}
+    monkeypatch.setattr(browser, "_media_state", lambda page: {})
+    browser._settle_teach_events(page=None, force=True)
+    assert [s["press"] for s in browser._teach["steps"]] == ["k"]
+
+    browser._teach = None
+    browser._watch = {"play_id": 1, "spec": {}, "title": "x", "manual": False}
+    browser._last_automation = _time.monotonic() - 10
+    browser._on_record({}, {"type": "press", "key": "Escape", "hostOnly": True})
+    assert browser._watch["manual"] is True

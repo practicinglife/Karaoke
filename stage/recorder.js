@@ -91,8 +91,9 @@
     (event) => {
       if (!event.isTrusted || event.repeat) return;
       if (["Shift", "Control", "Alt", "Meta"].includes(event.key)) return;
-      // The app manages the window's fullscreen itself; replaying these would fight it.
-      if (["F11", "Escape"].includes(event.key)) return;
+      // The app manages the window's fullscreen itself, so Teach mode never replays these;
+      // they still tell the app the host has taken over the song.
+      const hostOnly = ["F11", "Escape"].includes(event.key);
       const active = document.activeElement;
       if (active && (active.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(active.tagName))) return;
       send({
@@ -101,6 +102,7 @@
         focus: active && active !== document.body ? selectorsFor(active) : [],
         wasPlaying: mediaPlaying(),
         wasFullscreen: Boolean(document.fullscreenElement),
+        hostOnly,
       });
     },
     true

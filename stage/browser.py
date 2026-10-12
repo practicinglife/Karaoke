@@ -44,6 +44,7 @@ TEACH_SETTLE_SECONDS = 1.5
 PREVIEW_SECONDS = 35.0
 # Clicks/keys arriving this soon after one of the app's own actions are the app's.
 AUTOMATION_GRACE_SECONDS = 1.5
+WINDOW_CHECK_SECONDS = 3.0
 PREVIEW_SERVICES = {"apple_music", "spotify"}
 
 EventCallback = Callable[[str, int, str], None]
@@ -244,6 +245,8 @@ class StageBrowser:
         self._watch: dict[str, Any] | None = None
         self._teach: dict[str, Any] | None = None
         self._last_automation = 0.0
+        self._placement: tuple[tuple[int, int, int, int] | None, bool] = (None, False)
+        self._last_window_check = 0.0
         self._window_bounds: dict[str, Any] = {}
 
     # ----- public API (any thread) -------------------------------------------------
@@ -427,6 +430,56 @@ class StageBrowser:
                     self.on_event("attention", args[0], f"Could not load the song page: {exc}")
 
     def _place(self, page, monitor_rect, fullscreen: bool) -> None:
+        """Position the window, then redo the song's fullscreen steps if one is playing."""
+        self._placement = (monitor_rect, fullscreen)
+        self._set_window(page, monitor_rect, fullscreen)
+        if self._watch:
+            # Changing the window state drops the player's fullscreen; redo those steps.
+            page.wait_for_timeout(500)
+            self._redo_fullscreen_steps(page)
+
+    def _redo_fullscreen_steps(self, page) -> None:
+        steps = [step for step in self._watch["spec"].get("steps", []) if step.get("unless")] if self._watch else []
+        if steps:
+            self._run_steps(page, {"steps": steps})
+
+    def _window_state(self, page) -> str:
+        cdp = page.context.new_cdp_session(page)
+        try:
+            window_id = cdp.send("Browser.getWindowForTarget")["windowId"]
+            return cdp.send("Browser.getWindowBounds", {"windowId": window_id})["bounds"].get("windowState", "")
+        finally:
+            cdp.detach()
+
+    def _ensure_window(self, page) -> bool:
+        """Put the stage window back to fullscreen if something took it out. Returns True if it did."""
+        monitor_rect, fullscreen = self._placement
+        if not fullscreen or self._teach:
+            return False
+        if self._window_state(page) == "fullscreen":
+            return False
+        logger.info("Stage window left fullscreen; restoring it")
+        self._set_window(page, monitor_rect, fullscreen)
+        return True
+
+    def _clear_stuck_fullscreen(self, page, check: str) -> None:
+        """A page left fullscreen while its player isn't would make the player's
+        fullscreen button *exit* fullscreen (and drop the window). Clear it first."""
+        if check == "fullscreen" or self._is_fullscreen(page, check):
+            return
+        try:
+            stuck = page.evaluate("() => Boolean(document.fullscreenElement)")
+        except Exception:
+            return
+        if not stuck:
+            return
+        logger.info("Clearing a stuck page fullscreen before the player's fullscreen step")
+        page.evaluate("() => document.exitFullscreen().catch(() => {})")
+        page.wait_for_timeout(700)
+        self._ensure_window(page)
+        page.wait_for_timeout(800)
+
+    def _set_window(self, page, monitor_rect, fullscreen: bool) -> None:
         """Position the window with the DevTools window API.
 
         A normal-sized window is put just inside the target monitor, then made
@@ -449,11 +502,6 @@ class StageBrowser:
             logger.info("Stage window placed: %s", self._window_bounds)
         finally:
             cdp.detach()
-        if self._watch:
-            # Changing the window state drops the player's fullscreen; redo those steps.
-            page.wait_for_timeout(500)
-            steps = [step for step in self._watch["spec"].get("steps", []) if step.get("unless")]
-            self._run_steps(page, {"steps": steps})
 
     def _goto(self, page, url: str) -> None:
         page.goto(url, wait_until="domcontentloaded", timeout=30_000)
@@ -501,6 +549,7 @@ class StageBrowser:
                 # playing, so wait for playback and let the player settle first.
                 self._wait_playing(page, 10)
                 page.wait_for_timeout(1000)
+                self._clear_stuck_fullscreen(page, step["unless"])
                 if self._is_fullscreen(page, step["unless"]):
                     continue
             if "wait_playing" in step:
@@ -544,6 +593,27 @@ class StageBrowser:
                     self._last_automation = time.monotonic()
                 except Exception:
                     pass
+        if not watch.get("manual") and time.monotonic() - self._last_window_check >= WINDOW_CHECK_SECONDS:
+            # Keep the stage fullscreen during songs (a player leaving its fullscreen can
+            # drop the window out of it) - unless the host has taken over.
+            self._last_window_check = time.monotonic()
+            try:
+                if self._ensure_window(page):
+                    page.wait_for_timeout(500)
+                    self._redo_fullscreen_steps(page)
+                elif self._media_state(page).get("playing"):
+                    # The player dropped out of its fullscreen (or lyrics view) by itself:
+                    # put it back - only where there's a reliable check, since these toggle.
+                    lapsed = [
+                        step for step in spec.get("steps", [])
+                        if step.get("unless") not in (None, "", "fullscreen")
+                        and not self._is_fullscreen(page, step["unless"])
+                    ]
+                    if lapsed:
+                        logger.info("Player left fullscreen during the song; restoring it")
+                        self._run_steps(page, {"steps": lapsed})
+            except Exception:
+                logger.exception("Could not check the stage window")
         state = self._media_state(page)
         busy = self._first_visible(page, spec.get("busy", [])) is not None
         if state.get("started") and not watch["started"]:
@@ -596,7 +666,7 @@ class StageBrowser:
     def _on_record(self, source: dict[str, Any], payload: dict[str, Any]) -> None:
         teach = self._teach
         if not teach:
-            self._on_host_action()
+            self._on_host_action(payload)
             return
         if not isinstance(payload, dict):
             return
@@ -607,7 +677,7 @@ class StageBrowser:
         payload["at"] = time.monotonic()
         teach["pending"].append(payload)
 
-    def _on_host_action(self) -> None:
+    def _on_host_action(self, payload: Any = None) -> None:
         """The host clicked or typed in the stage window during a song: stop fighting them.
 
         The app's remaining steps for this song are skipped, and whatever track the host
@@ -618,6 +688,12 @@ class StageBrowser:
         if not watch or time.monotonic() - self._last_automation < AUTOMATION_GRACE_SECONDS:
             return  # not during a song, or it's the app's own click
         watch["title"] = ""
+        if isinstance(payload, dict):
+            logger.info(
+                "Host action in stage window: %s %s",
+                payload.get("type"),
+                payload.get("key") or payload.get("label") or "",
+            )
         if not watch.get("manual"):
             watch["manual"] = True
             self.on_event("manual", watch["play_id"], "You took over this song; the app will follow what you play.")
@@ -629,6 +705,8 @@ class StageBrowser:
             return
         while teach["pending"] and (force or time.monotonic() - teach["pending"][0]["at"] >= TEACH_SETTLE_SECONDS):
             event = teach["pending"].pop(0)
+            if event.get("hostOnly"):
+                continue  # Escape/F11: the app manages window fullscreen itself
             state = self._media_state(page)
             # If the host clicked again quickly, judge this click's effect by the page state
             # captured at the next click, so the effect of a later click isn't credited to it.
