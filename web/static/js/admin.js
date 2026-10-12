@@ -61,8 +61,7 @@ function formatSelectorReport(report) {
     const mark = row.visible ? "VISIBLE" : row.count > 0 ? "hidden " : row.count < 0 ? "ERROR  " : "missing";
     lines.push(`${mark}  [${row.group}]  ${row.selector}`);
   }
-  return lines.join("
-");
+  return lines.join("\n");
 }
 
 async function postStageAction(action) {
