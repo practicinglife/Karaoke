@@ -593,6 +593,8 @@ class StageBrowser:
                     self._last_automation = time.monotonic()
                 except Exception:
                     pass
+        state = self._media_state(page)
+        busy = self._first_visible(page, spec.get("busy", [])) is not None
         if not watch.get("manual") and time.monotonic() - self._last_window_check >= WINDOW_CHECK_SECONDS:
             # Keep the stage fullscreen during songs (a player leaving its fullscreen can
             # drop the window out of it) - unless the host has taken over.
@@ -601,7 +603,7 @@ class StageBrowser:
                 if self._ensure_window(page):
                     page.wait_for_timeout(500)
                     self._redo_fullscreen_steps(page)
-                elif self._media_state(page).get("playing"):
+                elif state.get("playing"):
                     # The player dropped out of its fullscreen (or lyrics view) by itself:
                     # put it back - only where there's a reliable check, since these toggle.
                     lapsed = [
@@ -614,8 +616,6 @@ class StageBrowser:
                         self._run_steps(page, {"steps": lapsed})
             except Exception:
                 logger.exception("Could not check the stage window")
-        state = self._media_state(page)
-        busy = self._first_visible(page, spec.get("busy", [])) is not None
         if state.get("started") and not watch["started"]:
             watch["started"] = True
             self.on_event("started", watch["play_id"], "")
