@@ -6,6 +6,7 @@
     "Step types: click (optionally only 'when': 'paused'), press (a key, optionally after focusing an element), wait_playing (ms), wait (ms).",
     "'unless' skips a step when the player is already fullscreen (fullscreen buttons and keys toggle): a CSS selector that matches only in fullscreen, or 'fullscreen' for any element other than the whole page.",
     "'{track_id}' in a selector is the track id from the song link (Apple Music '?i='); 'requires' / 'requires_not': 'track_id' run a step only when the link does / doesn't name a track.",
+    "'keep': true (only with a reliable 'unless' check) lets the app put a video player back into fullscreen if it drops out during a song.",
     "'optional': true means a missing button is not an error. 'busy' selectors mark an ad/interstitial so its end is not treated as the song ending.",
     "'watch_clicks' are clicked whenever they appear during playback (skip-ad buttons, 'still watching?' prompts).",
     "Use 'Test selectors' on the admin page while a song is on the stage screen to see which selectors currently match."
@@ -17,8 +18,8 @@
     "steps": [
       {"wait_playing": 6000},
       {"click": ["button.ytp-large-play-button", "button.ytp-play-button"], "when": "paused", "optional": true, "timeout": 4000},
-      {"click": ["button.ytp-fullscreen-button"], "unless": "#movie_player.ytp-fullscreen", "optional": true, "timeout": 3000},
-      {"press": "f", "focus": ["#movie_player"], "unless": "#movie_player.ytp-fullscreen", "optional": true}
+      {"click": ["button.ytp-fullscreen-button"], "unless": "#movie_player.ytp-fullscreen", "keep": true, "optional": true, "timeout": 3000},
+      {"press": "f", "focus": ["#movie_player"], "unless": "#movie_player.ytp-fullscreen", "keep": true, "optional": true}
     ]
   },
   "youtube_music": {
@@ -29,7 +30,7 @@
       {"wait_playing": 6000},
       {"click": ["#play-pause-button", "ytmusic-play-button-renderer"], "when": "paused", "optional": true, "timeout": 4000},
       {"click": ["tp-yt-paper-tab:has-text('Lyrics')", "role=tab[name=/lyrics/i]"], "optional": true, "timeout": 6000},
-      {"press": "f", "unless": "ytmusic-player[player-ui-state='FULLSCREEN']", "optional": true}
+      {"press": "f", "unless": "ytmusic-player[player-ui-state='FULLSCREEN']", "keep": true, "optional": true}
     ]
   },
   "spotify": {
@@ -64,7 +65,7 @@
     "steps": [
       {"wait_playing": 8000},
       {"click": ["#play-btn"], "when": "paused", "optional": true, "timeout": 4000},
-      {"click": ["#fullscreen-btn"], "unless": "canvas:fullscreen, video:fullscreen", "optional": true, "timeout": 4000}
+      {"click": ["#fullscreen-btn"], "unless": "canvas:fullscreen, video:fullscreen", "keep": true, "optional": true, "timeout": 4000}
     ]
   }
 }

@@ -528,3 +528,35 @@ def test_escape_and_f11_take_over_but_are_never_taught(monkeypatch) -> None:
     browser._last_automation = _time.monotonic() - 10
     browser._on_record({}, {"type": "press", "key": "Escape", "hostOnly": True})
     assert browser._watch["manual"] is True
+
+
+def test_watcher_never_re_presses_apple_lyrics_and_limits_restores(monkeypatch) -> None:
+    import time as _time
+
+    from stage.browser import StageBrowser, resolve_spec
+
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: None)
+    browser._placement = (None, False)  # window check is a no-op here
+    pressed: list[list[dict]] = []
+    monkeypatch.setattr(browser, "_run_steps", lambda page, spec: pressed.append(spec["steps"]) or "")
+    monkeypatch.setattr(browser, "_first_visible", lambda page, selectors: None)
+    monkeypatch.setattr(browser, "_is_fullscreen", lambda page, check: False)  # sidebar/fullscreen "gone"
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"started": True, "playing": True, "title": "x", "duration": 200, "position": 50})
+
+    def watch(service, params):
+        spec = resolve_spec(load_selectors(overrides=Path("missing.json"))[service], params)
+        return {"play_id": 1, "service": service, "spec": spec, "deadline": 1e12, "started": True,
+                "attention": False, "title": "x", "manual": False}
+
+    browser._watch = watch("apple_music", {"track_id": "1"})
+    for _ in range(3):
+        browser._last_window_check = 0
+        browser._poll(None)
+    assert pressed == []  # Apple's lyrics steps are never re-pressed
+
+    browser._watch = watch("youtube", {"track_id": ""})
+    for _ in range(5):
+        browser._last_window_check = 0
+        browser._poll(None)
+    assert len(pressed) == 2  # YouTube fullscreen restored at most twice per song
+    assert all(step.get("keep") for steps in pressed for step in steps)

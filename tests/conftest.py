@@ -11,7 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import app as app_module
 from app import create_app, create_runtime_state
+
+# Tests must not write into the real app log (logs/karaoke-ticker.log).
+app_module.configure_logging = lambda: None
 from config import AppConfig
 from karaoke.services import create_or_get_user, create_session, set_setting
 from stage.controller import StageController

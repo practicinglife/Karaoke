@@ -45,6 +45,7 @@ PREVIEW_SECONDS = 35.0
 # Clicks/keys arriving this soon after one of the app's own actions are the app's.
 AUTOMATION_GRACE_SECONDS = 1.5
 WINDOW_CHECK_SECONDS = 3.0
+MAX_RESTORES_PER_SONG = 2
 PREVIEW_SERVICES = {"apple_music", "spotify"}
 
 EventCallback = Callable[[str, int, str], None]
@@ -439,7 +440,8 @@ class StageBrowser:
             self._redo_fullscreen_steps(page)
 
     def _redo_fullscreen_steps(self, page) -> None:
-        steps = [step for step in self._watch["spec"].get("steps", []) if step.get("unless")] if self._watch else []
+        # Only video-fullscreen steps marked "keep": lyrics views and other toggles stay as they are.
+        steps = [step for step in self._watch["spec"].get("steps", []) if step.get("keep")] if self._watch else []
         if steps:
             self._run_steps(page, {"steps": steps})
 
@@ -603,15 +605,17 @@ class StageBrowser:
                 if self._ensure_window(page):
                     page.wait_for_timeout(500)
                     self._redo_fullscreen_steps(page)
-                elif state.get("playing"):
-                    # The player dropped out of its fullscreen (or lyrics view) by itself:
-                    # put it back - only where there's a reliable check, since these toggle.
+                elif state.get("playing") and watch.get("restores", 0) < MAX_RESTORES_PER_SONG:
+                    # The video player dropped out of fullscreen by itself: put it back. Only
+                    # steps marked "keep" (a reliable fullscreen check), and only a couple of
+                    # times per song - other steps (lyrics views) toggle and would loop.
                     lapsed = [
                         step for step in spec.get("steps", [])
-                        if step.get("unless") not in (None, "", "fullscreen")
+                        if step.get("keep") and step.get("unless") not in (None, "", "fullscreen")
                         and not self._is_fullscreen(page, step["unless"])
                     ]
                     if lapsed:
+                        watch["restores"] = watch.get("restores", 0) + 1
                         logger.info("Player left fullscreen during the song; restoring it")
                         self._run_steps(page, {"steps": lapsed})
             except Exception:
