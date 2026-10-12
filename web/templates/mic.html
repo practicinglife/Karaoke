@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Mic Stand">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <title>Karaoke Ticker - Mic Stand</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mic.css') }}">
+</head>
+<body>
+  <header class="mic-header">{{ house_name }}</header>
+  <main class="mic-main">
+    <div id="mic-label" class="mic-label"></div>
+    <div id="mic-singer" class="mic-singer"></div>
+    <div id="mic-song" class="mic-song"></div>
+    <div id="mic-countdown" class="mic-countdown" hidden></div>
+    <button id="mic-start" class="mic-start" type="button" disabled>START</button>
+    <div id="mic-message" class="mic-message" role="status" aria-live="polite"></div>
+  </main>
+  <script>
+    window.KT_MIC = { key: {{ key|tojson }}, state: {{ stage_state|tojson }} };
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='js/mic.js') }}"></script>
+</body>
+</html>

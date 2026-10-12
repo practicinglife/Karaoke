@@ -310,9 +310,11 @@ class StageController:
         with self._lock:
             head = self._head_item() if self.state == INTERMISSION else None
             ends = self.countdown_ends_at
+            now = self._now_item() if self.state in (STARTING, PLAYING) else None
             return {
                 "state": self.state,
                 "message": self.message,
+                "now": now,
                 "browser_running": self.driver.is_running,
                 "next": {k: v for k, v in head.items() if k != "user_id"} if head else None,
                 "countdown_ends_at": int(ends * 1000) if ends else None,
@@ -350,6 +352,18 @@ class StageController:
             return {
                 "item_id": item.id,
                 "user_id": item.user_id,
+                "user": item.user.display_name if item.user else "",
+                "song": item.song.title if item.song else "",
+                "artist": item.song.artist if item.song else "",
+            }
+
+    def _now_item(self) -> dict[str, Any] | None:
+        with self.db.session_scope() as db:
+            record = active_session(db)
+            item = QueueManager(db).now_playing(record.id) if record else None
+            if not item:
+                return None
+            return {
                 "user": item.user.display_name if item.user else "",
                 "song": item.song.title if item.song else "",
                 "artist": item.song.artist if item.song else "",

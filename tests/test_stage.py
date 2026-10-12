@@ -345,3 +345,38 @@ def test_preview_clip_ending_is_reported_not_treated_as_song_end(monkeypatch) ->
     monkeypatch.setattr(browser, "_media_state", lambda page: {"started": True, "ended": True, "duration": 241.0, "position": 241.0})
     browser._poll(page=None)
     assert events == [("ended", 8, "")]
+
+
+def test_admin_play_opens_stage_and_plays_even_when_stage_closed(app, client, stage) -> None:
+    item_id, _ = _queue(app, "Alice")
+    assert not stage.driver.is_running
+    response = client.post(
+        "/admin/action",
+        data={"csrf_token": _csrf(client), "action": "play", "queue_item_id": str(item_id)},
+        headers={"X-Admin-Token": _token(app)},
+    )
+    assert response.status_code == 200
+    assert stage.driver.is_running
+    assert [c[0] for c in stage.driver.calls][-1] == "play"
+    assert stage.snapshot()["now"]["user"] == "Alice"
+
+
+def test_mic_stand_page_and_button(app, client, stage) -> None:
+    with app.runtime_state.db.session_scope() as db:
+        key = get_setting(db, "stage_button_secret")
+    assert client.get("/mic").status_code == 403
+    assert client.get("/mic?key=nope").status_code == 403
+    page = client.get(f"/mic?key={key}")
+    assert page.status_code == 200 and b"mic-start" in page.data
+
+    qr = client.get(f"/admin/mic-qr.png?token={_token(app)}")
+    assert qr.status_code == 200 and qr.mimetype == "image/png"
+    assert client.get("/admin/mic-qr.png").status_code == 403
+
+    # Stage closed: START opens it and plays whoever is up.
+    _queue(app, "Bob")
+    assert stage.state == IDLE
+    response = client.post(f"/api/stage/ready?key={key}")
+    assert response.status_code == 200
+    assert stage.state == STARTING
+    assert stage.snapshot()["now"]["user"] == "Bob"

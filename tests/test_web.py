@@ -446,7 +446,7 @@ def test_settings_persist_remote_traditional_server_url(client, app) -> None:
         assert get_setting(db, "traditional_karaoke_server_url") == "https://karaoke.example.com"
 
 
-def test_admin_action_opens_local_player_for_traditional_song(client, app, test_karaoke_folder, monkeypatch) -> None:
+def test_admin_action_plays_traditional_song_on_stage_screen(client, app, test_karaoke_folder, monkeypatch) -> None:
     with app.runtime_state.db.session_scope() as db:
         session = active_session(db)
         assert session is not None
@@ -481,8 +481,12 @@ def test_admin_action_opens_local_player_for_traditional_song(client, app, test_
     )
 
     assert response.status_code == 200
-    assert launch_urls and "/player?token=" in launch_urls[0]
-    assert f"song_id={lib.id}" in launch_urls[0]
+    # Same as the singer's START MY SONG: the built-in player opens on the stage screen,
+    # not in a new browser tab.
+    assert launch_urls == []
+    play = [c for c in app.runtime_state.stage.driver.calls if c[0] == "play"][-1]
+    assert play[2] == "traditional"
+    assert "/player?token=" in play[3] and f"song_id={lib.id}" in play[3] and "autoplay=1" in play[3]
     with app.runtime_state.db.session_scope() as db:
         qm = QueueManager(db)
         now_playing = qm.now_playing(session.id)

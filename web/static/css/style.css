@@ -360,3 +360,10 @@ a {
   padding: 0.6rem;
   border-radius: 6px;
 }
+
+.mic-qr {
+  display: block;
+  background: #fff;
+  padding: 8px;
+  border-radius: 8px;
+}

@@ -56,6 +56,11 @@
       <button type="button" data-stage-action="test_selectors">TEST SELECTORS ON CURRENT SONG PAGE</button>
       <pre id="stage-report" class="stage-report" hidden></pre>
 
+      <h3>Mic stand iPad / iPhone</h3>
+      <p>Scan with the tablet at the mic stand. It shows who is up next and one big START button that plays their song. Add it to the home screen to keep it for every night.</p>
+      <img class="mic-qr" src="{{ url_for('web.mic_qr', token=token) }}" alt="QR code for the mic stand page" width="220" height="220">
+      <p><a href="{{ mic_url }}" target="_blank" rel="noopener">Open the mic stand page</a></p>
+
       <h3>Teach a service</h3>
       <p>Open a song, then do exactly what you would do by hand (play, lyrics, maximize, full screen). The app records your clicks and repeats them for every song from that service.</p>
       <label for="teach-service">Service</label>

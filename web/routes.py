@@ -1143,8 +1143,10 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             waiting = qm.ordered_up_next(record.id, settings["rotation"])
             users = list_users(db)
             stage_monitor = get_setting(db, "stage_monitor")
+            mic_url = _mic_url(get_setting(db, "stage_button_secret"))
             return render_template(
                 "admin.html",
+                mic_url=mic_url,
                 monitors=describe_monitors(),
                 stage_monitor=stage_monitor,
                 now_playing=now_playing,
@@ -1372,10 +1374,8 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             rotation = get_setting(db, "singer_rotation_on") == "1"
             playback_mode = get_playback_mode(db)
             external_app_path = get_external_application_path(db)
-            # The stage is used when it's enabled in Settings or its window is open.
-            stage_enabled = get_setting(db, "stage_enabled") == "1" or stage.driver.is_running
             if action == "next":
-                if stage_enabled and stage.state != IDLE:
+                if stage.state != IDLE:
                     stage_next = True
                 else:
                     qm.next_song(record.id, rotation)
@@ -1395,9 +1395,9 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     from karaoke.launcher import launch_traditional_song, launch_url
 
                     stage_service = stage_service_for(song.service, song.url)
-                    if stage_enabled and stage_service and (
-                        stage_service != "traditional" or playback_mode == "built_in"
-                    ):
+                    # PLAY works like the singer's START MY SONG: songs the stage can play
+                    # always go to the stage screen (opened if needed).
+                    if stage_service and (stage_service != "traditional" or playback_mode == "built_in"):
                         stage_item_id = item_id
                     try:
                         if stage_item_id is not None:
@@ -1561,15 +1561,50 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
         ok, message = runtime_state.stage.singer_ready("phone", user_id=user_id)
         return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
 
-    @bp.route("/api/stage/ready", methods=["GET", "POST"])
-    def stage_ready_button() -> Response:
-        """Network ready button (Flic, ESP32, smart button): ?key=<stage_button_secret>."""
+    def _require_button_key() -> str:
         key = request.args.get("key") or request.form.get("key") or ""
         with runtime_state.db.session_scope() as db:
             secret = get_setting(db, "stage_button_secret")
         if not secret or not secrets.compare_digest(key, secret):
             abort(403, "Invalid button key.")
-        ok, message = runtime_state.stage.singer_ready("network")
+        return key
+
+    def _mic_url(key: str) -> str:
+        return f"{request.host_url.rstrip('/')}{url_for('web.mic_page', key=key)}"
+
+    @bp.get("/mic")
+    def mic_page() -> str:
+        """Mic-stand page for an iPad/iPhone: one big START button for whoever is up."""
+        key = _require_button_key()
+        with runtime_state.db.session_scope() as db:
+            house_name = get_setting(db, "house_name") or "Karaoke Ticker"
+        return render_template(
+            "mic.html", key=key, house_name=house_name, stage_state=runtime_state.stage.snapshot()
+        )
+
+    @bp.get("/admin/mic-qr.png")
+    def mic_qr() -> Response:
+        _ = require_admin()
+        import io
+
+        import qrcode
+
+        with runtime_state.db.session_scope() as db:
+            key = get_setting(db, "stage_button_secret")
+        buffer = io.BytesIO()
+        qrcode.make(_mic_url(key)).save(buffer, format="PNG")
+        return Response(buffer.getvalue(), mimetype="image/png")
+
+    @bp.route("/api/stage/ready", methods=["GET", "POST"])
+    def stage_ready_button() -> Response:
+        """Network ready button (Flic, ESP32, smart button, mic-stand page): ?key=<stage_button_secret>."""
+        _require_button_key()
+        stage = runtime_state.stage
+        if stage.state == IDLE:
+            # Stage window not open yet: open it, then start whoever is up.
+            stage.set_base_url(request.host_url)
+            stage.open()
+        ok, message = stage.singer_ready("network")
         return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
 
     @bp.get("/settings")
@@ -1586,7 +1621,6 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     "ticker_upcoming_count",
                     "singer_rotation_on",
                     "house_name",
-                    "stage_enabled",
                     "stage_monitor",
                     "stage_fullscreen",
                     "intermission_folder",
@@ -1643,7 +1677,6 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                 flash("Countdown must be 5-600 seconds", "error")
                 return redirect(url_for("web.settings_get", token=record.admin_token))
             expiry = request.form.get("countdown_expiry_action", "wait")
-            set_setting(db, "stage_enabled", "1" if request.form.get("stage_enabled") == "on" else "0")
             set_setting(db, "stage_monitor", stage_monitor)
             set_setting(db, "stage_fullscreen", "1" if request.form.get("stage_fullscreen") == "on" else "0")
             set_setting(db, "intermission_folder", request.form.get("intermission_folder", "").strip())

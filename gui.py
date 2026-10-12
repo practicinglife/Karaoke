@@ -91,6 +91,7 @@ class KaraokeTickerGUI(ctk.CTk):
             ("SHOW QR CODE", self.show_qr_code),
             ("SHOW KIOSK QR", self.show_kiosk_qr),
             ("SHOW TICKER QR", self.show_ticker_qr),
+            ("SHOW MIC STAND QR", self.show_mic_qr),
             ("OPEN KIOSK", self.open_kiosk),
             ("OPEN ADMIN", self.open_admin),
             ("OPEN TICKER", self.open_ticker),
@@ -230,6 +231,21 @@ class KaraokeTickerGUI(ctk.CTk):
             messagebox.showwarning("Ticker QR", "Start a house first.")
             return
         webbrowser.open(Path(self.runtime_state.ticker_qr_path).as_uri())
+
+    def show_mic_qr(self) -> None:
+        """QR for the mic-stand iPad/iPhone page (works every night; uses the button key)."""
+        try:
+            with self.runtime_state.db.session_scope() as db:
+                port = int(get_setting(db, "web_server_port") or "8080")
+                key = get_setting(db, "stage_button_secret")
+            self._ensure_server_running(port)
+            url = f"http://{get_lan_ip()}:{port}/mic?key={key}"
+            output = Path(DATA_DIR) / "mic_qr.png"
+            output.parent.mkdir(parents=True, exist_ok=True)
+            qrcode.make(url).save(output)
+            webbrowser.open(output.as_uri())
+        except Exception as exc:
+            messagebox.showwarning("Mic Stand QR", str(exc))
 
     def _active_admin_urls(self) -> tuple[str, str]:
         with self.runtime_state.db.session_scope() as db:

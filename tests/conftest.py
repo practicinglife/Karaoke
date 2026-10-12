@@ -14,6 +14,44 @@ if str(ROOT) not in sys.path:
 from app import create_app, create_runtime_state
 from config import AppConfig
 from karaoke.services import create_or_get_user, create_session, set_setting
+from stage.controller import StageController
+
+
+class NullStageDriver:
+    """Stand-in for the Edge stage window: records calls, opens nothing."""
+
+    def __init__(self, on_event) -> None:
+        self.on_event = on_event
+        self.is_running = False
+        self.calls: list[tuple] = []
+
+    def start(self, *, monitor_rect=None, fullscreen=True, extra_args=None) -> None:
+        self.is_running = True
+        self.calls.append(("start",))
+
+    def place(self, monitor_rect, fullscreen) -> None:
+        self.calls.append(("place", monitor_rect, fullscreen))
+
+    def show(self, url: str) -> None:
+        self.calls.append(("show", url))
+
+    def play(self, play_id: int, service: str, url: str) -> None:
+        self.calls.append(("play", play_id, service, url))
+
+    def close(self, wait_seconds: float = 0.0) -> None:
+        self.is_running = False
+
+    def test_selectors(self, timeout: float = 20.0) -> dict:
+        return {}
+
+    def teach_start(self, service, url, monitor_rect) -> None:
+        self.calls.append(("teach_start", service, url))
+
+    def teach_status(self) -> list:
+        return []
+
+    def teach_stop(self, timeout: float = 20.0) -> list:
+        return []
 
 
 @pytest.fixture()
@@ -44,6 +82,10 @@ def app(tmp_path: Path, test_karaoke_folder: Path):
         set_setting(db, "web_server_port", "5050")
         create_session(db, "Test House")
         create_or_get_user(db, "Dale")
+    # Never launch a real Edge window from tests.
+    state.stage = StageController(
+        state.db, emit=lambda *_: None, emit_queue=lambda: None, driver_factory=NullStageDriver
+    )
     flask_app = create_app(runtime_state=state, config=config)
     flask_app.config.update(TESTING=True)
     return flask_app

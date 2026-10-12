@@ -40,7 +40,7 @@
 
       <h2>Stage Screen</h2>
       <p>Plays songs in a dedicated Edge window on the audience screen. Between songs it shows the next singer with a countdown and plays intermission music until they press ready.</p>
-      <label><input type="checkbox" name="stage_enabled" {% if values['stage_enabled'] == '1' %}checked{% endif %}> Use the stage screen for YouTube, YouTube Music, Spotify, Apple Music and built-in traditional karaoke</label>
+      <p>PLAY on the admin page and START MY SONG on a phone both play on the stage screen; it opens automatically if needed.</p>
       <label>Stage screen (where the playback window opens)</label>
       <select name="stage_monitor">
         {% for m in monitors %}
