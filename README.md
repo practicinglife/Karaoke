@@ -1,6 +1,6 @@
 # Karaoke Ticker
 
-Karaoke Ticker is a complete standalone karaoke application.
+Karaoke Ticker is a complete karaoke application.
 
 It is a Windows-first karaoke host application built with CustomTkinter, Flask, Flask-SocketIO, and SQLite. It provides a local operator GUI, phone-friendly guest pages, live admin and ticker views, indexed traditional karaoke search, and browser-based queue updates.
 
