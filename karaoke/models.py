@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import LIBRARY_PRIMARY_FILE_INDEX, Base
@@ -103,6 +103,18 @@ class QueueItem(Base):
     session: Mapped[SessionRecord] = relationship("SessionRecord", back_populates="queue_items")
     user: Mapped[User] = relationship("User", back_populates="queue_items")
     song: Mapped[Song] = relationship("Song", back_populates="queue_items")
+
+
+class SessionSinger(Base):
+    """A singer's place in one night's rotation (kept even when they have nothing queued)."""
+
+    __tablename__ = "session_singers"
+    __table_args__ = (UniqueConstraint("session_id", "user_id", name="uq_session_singer"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    rotation_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Setting(Base):

@@ -560,3 +560,17 @@ def test_watcher_never_re_presses_apple_lyrics_and_limits_restores(monkeypatch) 
         browser._poll(None)
     assert len(pressed) == 2  # YouTube fullscreen restored at most twice per song
     assert all(step.get("keep") for steps in pressed for step in steps)
+
+
+def test_finishing_teach_mode_mid_song_plays_that_song_again(app, stage, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(plans, "overrides_path", lambda: tmp_path / "stage_selectors.json")
+    item_id, _ = _queue(app, "Alice")
+    _queue(app, "Bob")
+    stage.start_item(item_id)
+    plays_before = [c for c in stage.driver.calls if c[0] == "play"]
+    stage.teach_start("apple_music", "https://music.apple.com/us/album/a/1?i=2")
+    stage.teach_finish(save=True)
+    plays_after = [c for c in stage.driver.calls if c[0] == "play"]
+    assert len(plays_after) == len(plays_before) + 1
+    assert stage.state == STARTING  # Alice's song again, not the intermission screen
+    assert _status(app, item_id) == NOW_PLAYING
