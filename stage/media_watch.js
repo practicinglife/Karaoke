@@ -52,8 +52,11 @@
     tracked.add(el);
     el.addEventListener("playing", () => {
       flags.started = true;
+      // Playback started again (the host restarted or switched the track, or a player
+      // reloaded its source), so an earlier 'ended' no longer means the song is over.
+      // A site rolling straight into the next track is caught by the title change instead.
+      flags.ended = false;
     });
-    // Sticky: sites often auto-play the next track right after the song ends.
     // An 'ended' while a busy marker (e.g. YouTube ad) is showing doesn't count.
     el.addEventListener("ended", () => {
       const busy = (window.__ktBusySelectors || []).some((selector) => {

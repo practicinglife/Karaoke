@@ -120,26 +120,18 @@ def test_rotation_order_matches_real_world_up_next_pattern(app) -> None:
         qm.add_song(session.id, kam.id, kam_4.id)
 
         ordered = qm.ordered_up_next(session.id, True)
+        # Order they joined tonight, one song per turn, rounds repeat; singers who run
+        # out of songs are skipped.
         assert [item.user.display_name for item in ordered] == [
-            "Kam",
-            "Dale",
-            "Missy",
-            "Levi",
-            "Kam",
-            "Dale",
-            "Missy",
-            "Levi",
-            "Kam",
-            "Dale",
-            "Missy",
-            "Levi",
-            "Kam",
-            "Missy",
+            "Dale", "Missy", "Levi", "Kam",
+            "Dale", "Missy", "Levi", "Kam",
+            "Dale", "Missy", "Levi", "Kam",
+            "Missy", "Kam",
             "Missy",
         ]
 
 
-def test_rotation_prioritizes_latest_added_group_once_then_resumes_turns(app) -> None:
+def test_rotation_follows_join_order_not_newest_first(app) -> None:
     with app.runtime_state.db.session_scope() as db:
         session = active_session(db)
         assert session is not None
@@ -157,8 +149,8 @@ def test_rotation_prioritizes_latest_added_group_once_then_resumes_turns(app) ->
 
         ordered = qm.ordered_up_next(session.id, True)
         assert [item.user.display_name for item in ordered] == [
-            "Singer C",
             "Singer A",
             "Singer B",
+            "Singer C",
             "Singer A",
         ]

@@ -7,7 +7,7 @@ from collections import deque
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from .models import QueueItem, SessionRecord
+from .models import QueueItem, SessionRecord, SessionSinger
 from .utils import utcnow
 
 WAITING = "WAITING"
@@ -47,6 +47,7 @@ class QueueManager:
         )
         self.db_session.add(item)
         self.db_session.flush()
+        self._join_rotation(session_id, user_id)
         return item
 
     def find_waiting_song(self, session_id: int, user_id: int, song_id: int) -> QueueItem | None:
@@ -96,55 +97,88 @@ class QueueManager:
         )
 
     def ordered_up_next(self, session_id: int, singer_rotation_on: bool) -> list[QueueItem]:
-        """Return up-next order according to settings."""
+        """Return up-next order according to settings.
+
+        Rotation: singers keep the place they first joined in tonight, one song per turn.
+        A new singer joins at the end of the order (so they sing at the start of the next
+        round). A singer with nothing queued keeps their place and their turn is skipped.
+        The cycle continues after whoever sang last, so nobody sings twice in a row while
+        others are waiting.
+        """
         waiting = self.waiting_items(session_id)
         if not singer_rotation_on:
             return waiting
 
-        user_buckets: dict[int, deque[QueueItem]] = {}
-        user_order: list[int] = []
+        buckets: dict[int, deque[QueueItem]] = {}
         for item in waiting:
-            bucket = user_buckets.get(item.user_id)
-            if bucket is None:
-                bucket = deque()
-                user_buckets[item.user_id] = bucket
-                user_order.append(item.user_id)
-            bucket.append(item)
+            buckets.setdefault(item.user_id, deque()).append(item)
+        order = self.rotation_order(session_id)
+        for user_id in buckets:  # safety net: anyone missing from the rotation goes last
+            if user_id not in order:
+                order.append(user_id)
 
-        rotation = deque(user_order)
-        current = self.now_playing(session_id)
-        last_user_id = current.user_id if current else None
+        last_item = self.now_playing(session_id) or self.db_session.scalar(
+            select(QueueItem)
+            .where(QueueItem.session_id == session_id, QueueItem.status.in_([COMPLETED, SKIPPED]))
+            .order_by(QueueItem.updated_at.desc(), QueueItem.id.desc())
+        )
+        start = 0
+        if last_item and last_item.user_id in order:
+            start = order.index(last_item.user_id) + 1
+
         output: list[QueueItem] = []
-
-        if waiting and rotation:
-            immediate_user_id = waiting[-1].user_id
-            has_alternative = any(uid != immediate_user_id for uid in rotation)
-            if immediate_user_id != last_user_id or not has_alternative:
-                while rotation and rotation[0] != immediate_user_id:
-                    rotation.rotate(-1)
-                selected_user_id = rotation.popleft()
-                output.append(user_buckets[selected_user_id].popleft())
-                last_user_id = selected_user_id
-                if user_buckets[selected_user_id]:
-                    rotation.append(selected_user_id)
-
-        while rotation:
-            selectable_users = [uid for uid in rotation if user_buckets.get(uid)]
-            if not selectable_users:
-                break
-
-            chosen_user_id = next((uid for uid in selectable_users if uid != last_user_id), selectable_users[0])
-
-            while rotation and rotation[0] != chosen_user_id:
-                rotation.rotate(-1)
-
-            selected_user_id = rotation.popleft()
-            output.append(user_buckets[selected_user_id].popleft())
-            last_user_id = selected_user_id
-            if user_buckets[selected_user_id]:
-                rotation.append(selected_user_id)
-
+        while any(buckets.values()):
+            for offset in range(len(order)):
+                user_id = order[(start + offset) % len(order)]
+                bucket = buckets.get(user_id)
+                if bucket:
+                    output.append(bucket.popleft())
         return output
+
+    def rotation_order(self, session_id: int) -> list[int]:
+        """Singers in tonight's rotation order, adding anyone not registered yet."""
+        rows = list(
+            self.db_session.scalars(
+                select(SessionSinger)
+                .where(SessionSinger.session_id == session_id)
+                .order_by(SessionSinger.rotation_order)
+            )
+        )
+        known = {row.user_id for row in rows}
+        # Singers whose songs were queued before rotation tracking existed: in the order
+        # of their first queued song tonight.
+        first_positions = self.db_session.execute(
+            select(QueueItem.user_id, func.min(QueueItem.queue_position))
+            .where(QueueItem.session_id == session_id)
+            .group_by(QueueItem.user_id)
+            .order_by(func.min(QueueItem.queue_position))
+        ).all()
+        missing = [user_id for user_id, _ in first_positions if user_id not in known]
+        if missing:
+            next_order = (rows[-1].rotation_order if rows else 0) + 1
+            for user_id in missing:
+                row = SessionSinger(session_id=session_id, user_id=user_id, rotation_order=next_order)
+                self.db_session.add(row)
+                rows.append(row)
+                next_order += 1
+            self.db_session.flush()
+        return [row.user_id for row in rows]
+
+    def _join_rotation(self, session_id: int, user_id: int) -> None:
+        exists = self.db_session.scalar(
+            select(SessionSinger.id).where(SessionSinger.session_id == session_id, SessionSinger.user_id == user_id)
+        )
+        if exists is None:
+            self.rotation_order(session_id)  # register earlier singers first, in their order
+            exists = self.db_session.scalar(
+                select(SessionSinger.id).where(SessionSinger.session_id == session_id, SessionSinger.user_id == user_id)
+            )
+        if exists is None:
+            last = self.db_session.scalar(
+                select(func.max(SessionSinger.rotation_order)).where(SessionSinger.session_id == session_id)
+            ) or 0
+            self.db_session.add(SessionSinger(session_id=session_id, user_id=user_id, rotation_order=last + 1))
+            self.db_session.flush()
 
     def mark_now_playing(self, queue_item_id: int) -> QueueItem:
         """Mark selected item as now playing and clear previous now playing."""
@@ -203,14 +237,26 @@ class QueueManager:
             index = index_by_id.get(item.id)
             if index is None:
                 return
-
             swap_index = index - 1 if direction == "up" else index + 1
             if swap_index < 0 or swap_index >= len(ordered):
                 return
-
-            ordered[index], ordered[swap_index] = ordered[swap_index], ordered[index]
-            for idx, entry in enumerate(ordered, start=1):
-                entry.queue_position = idx
+            other = ordered[swap_index]
+            if other.user_id == item.user_id:
+                # Same singer (only singer left): reorder their own songs.
+                item.queue_position, other.queue_position = other.queue_position, item.queue_position
+            else:
+                # Different singers: swap their places in tonight's rotation.
+                rows = {
+                    row.user_id: row
+                    for row in self.db_session.scalars(
+                        select(SessionSinger).where(
+                            SessionSinger.session_id == item.session_id,
+                            SessionSinger.user_id.in_([item.user_id, other.user_id]),
+                        )
+                    )
+                }
+                a, b = rows[item.user_id], rows[other.user_id]
+                a.rotation_order, b.rotation_order = b.rotation_order, a.rotation_order
             self.db_session.flush()
             return
 

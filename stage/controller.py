@@ -203,7 +203,9 @@ class StageController:
         self._publish()
 
     def teach_finish(self, save: bool) -> list[dict[str, Any]]:
-        """Stop recording; optionally save the steps. Returns to the stage screen either way."""
+        """Stop recording; optionally save the steps. Then back to the stage screen: if a song
+        was playing when teaching started, it starts again (with the new steps); otherwise
+        the intermission screen."""
         with self._lock:
             if self.state != TEACHING:
                 return []
@@ -215,8 +217,15 @@ class StageController:
             with self.db.session_scope() as db:
                 monitor = int(get_setting(db, "stage_monitor") or "2")
                 fullscreen = get_setting(db, "stage_fullscreen") != "0"
+                record = active_session(db)
+                interrupted = QueueManager(db).now_playing(record.id) if record else None
+                interrupted_id = interrupted.id if interrupted else None
             self.driver.place(self.monitor_rect(monitor), fullscreen)
-            self._enter_intermission()
+            if interrupted_id is not None:
+                logger.info("Teaching interrupted queue item %s; playing it again", interrupted_id)
+                self.start_item(interrupted_id)
+            else:
+                self._enter_intermission()
         self._publish()
         return steps
 
