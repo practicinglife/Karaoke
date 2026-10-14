@@ -184,7 +184,9 @@ class KaraokeTickerGUI(ctk.CTk):
             messagebox.showerror("Start Error", f"Unable to start house: {exc}")
             return
         self._refresh_state()
-        messagebox.showinfo("House Started", "House is now running.")
+        # The show runs itself from here: put the stage (intermission screen) on the TV.
+        self.open_stage()
+        messagebox.showinfo("House Started", "House is now running. The stage screen is open on the TV.")
 
     def stop_house(self) -> None:
         with self.runtime_state.db.session_scope() as db:
