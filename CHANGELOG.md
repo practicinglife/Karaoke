@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.1.1 — 2026-10-14
+
+### Changed
+- **Singer rotation:** singers keep the place they first joined in for the whole night, one
+  song per turn. A new singer joins at the start of the next round. A singer with nothing
+  queued keeps their place and their turn is skipped; queueing again puts them back in that
+  place (previously whoever queued most recently jumped to the top). Admin MOVE UP/DOWN swaps
+  two singers' places in the rotation.
+- **START HOUSE opens the stage screen** (intermission screen and break music) automatically.
+- README rewritten around the self-running show.
+
+### Fixed
+- A singer who just finished could be called straight back up during the intermission.
+- Songs could stop early after clicking in the stage window (restarting or switching the
+  track).
+- Finishing or cancelling Teach mode during a song dropped that song; it now plays again.
+
 ## v1.1.0 — 2026-10-11
 
 ### Added
