@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Apple Music songs on albums with an animated cover opened to a blank lyrics screen and
+  never played, and stopped partway through when played by hand. The silent cover video was
+  taken for the song; it's now ignored (`ignore_media` in `stage/selectors.json`).
+- The stage no longer opens lyrics or full screen over a song that isn't playing, and clicks
+  play once more if the song didn't start.
+- Edge's "connect to devices on your local network" popup on YouTube is blocked in the
+  stage window.
+
+### Changed
+- The log records each stage song: loading, each step, started, and why it ended. Web
+  requests are no longer logged one per line, which had pushed the stage lines out of the log.
+
 ## v1.1.1 — 2026-10-14
 
 ### Changed

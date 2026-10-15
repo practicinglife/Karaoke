@@ -62,5 +62,10 @@ paused, and clicks that go full screen are skipped when it already is. Click **S
 Taught steps are stored in `data/stage_selectors.json` and override the built-in ones in
 `stage/selectors.json`; **USE BUILT-IN STEPS FOR THIS SERVICE** removes them.
 
+Besides steps, each service in `stage/selectors.json` can list `ignore_media`: selectors for
+decorative video or audio that isn't the song. Apple Music's animated album covers are
+listed there, so a silent cover video can't make the app think the song is already playing
+or has ended.
+
 With a song on the stage screen, **TEST SELECTORS ON CURRENT SONG PAGE** shows which buttons
 the app can currently find.

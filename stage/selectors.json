@@ -8,6 +8,7 @@
     "'{track_id}' in a selector is the track id from the song link (Apple Music '?i='); 'requires' / 'requires_not': 'track_id' run a step only when the link does / doesn't name a track.",
     "'keep': true (only with a reliable 'unless' check) lets the app put a video player back into fullscreen if it drops out during a song.",
     "'optional': true means a missing button is not an error. 'busy' selectors mark an ad/interstitial so its end is not treated as the song ending.",
+    "'ignore_media' marks decorative video/audio that isn't the song (e.g. Apple Music's animated album covers) so it can't count as the song playing or ending.",
     "'watch_clicks' are clicked whenever they appear during playback (skip-ad buttons, 'still watching?' prompts).",
     "Use 'Test selectors' on the admin page while a song is on the stage screen to see which selectors currently match."
   ],
@@ -48,6 +49,7 @@
   "apple_music": {
     "hosts": ["music.apple.com"],
     "busy": [],
+    "ignore_media": ["amp-ambient-video", ".editorial-video"],
     "watch_clicks": [],
     "steps": [
       {"wait_playing": 4000},

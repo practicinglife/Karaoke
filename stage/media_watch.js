@@ -44,13 +44,29 @@
 
   const tracked = new Set();
   const flags = { started: false, ended: false };
+  // Decorative media that isn't the song: Apple Music's animated album covers are silent
+  // videos that start with the page (and fire 'ended' between clips). The app adds each
+  // service's 'ignore_media' selectors; these defaults cover the page before it does.
+  const DEFAULT_IGNORE = ["amp-ambient-video", ".editorial-video"];
+
+  function isBackground(el) {
+    return DEFAULT_IGNORE.concat(window.__ktIgnoreMedia || []).some((selector) => {
+      try {
+        return Boolean(el.closest(selector));
+      } catch (_error) {
+        return false;
+      }
+    });
+  }
 
   function track(el) {
-    if (!(el instanceof HTMLMediaElement) || tracked.has(el)) {
+    if (!(el instanceof HTMLMediaElement) || tracked.has(el) || isBackground(el)) {
       return;
     }
     tracked.add(el);
+    // Checked again at each event: an element can be moved into a cover after it was tracked.
     el.addEventListener("playing", () => {
+      if (isBackground(el)) return;
       flags.started = true;
       // Playback started again (the host restarted or switched the track, or a player
       // reloaded its source), so an earlier 'ended' no longer means the song is over.
@@ -59,6 +75,7 @@
     });
     // An 'ended' while a busy marker (e.g. YouTube ad) is showing doesn't count.
     el.addEventListener("ended", () => {
+      if (isBackground(el)) return;
       const busy = (window.__ktBusySelectors || []).some((selector) => {
         try {
           return Boolean(document.querySelector(selector));
@@ -87,6 +104,7 @@
     // Report the element that is (or was most recently) carrying the song.
     let best = null;
     for (const el of tracked) {
+      if (isBackground(el)) continue;
       if (!best || (!el.paused && best.paused) || (el.duration || 0) > (best.duration || 0)) {
         best = el;
       }

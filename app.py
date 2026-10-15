@@ -41,6 +41,8 @@ def configure_logging() -> None:
     handler.setFormatter(formatter)
     root = logging.getLogger()
     root.setLevel(logging.INFO)
+    # Every page polls the server each second; one line per request buried the stage log.
+    logging.getLogger("werkzeug").setLevel(logging.WARNING)
     if not any(
         isinstance(existing, RotatingFileHandler)
         and getattr(existing, "baseFilename", "") == str(log_file)
