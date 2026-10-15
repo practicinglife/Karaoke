@@ -158,6 +158,15 @@ The stage window signs in to your streaming services once and remembers it.
 
 `KaraokeTicker.exe --self-test` checks that the stage screen works on a computer and writes a report to `%TEMP%\karaoke-ticker-selftest.json`.
 
+### Is the download safe?
+
+- Every [release](https://github.com/practicinglife/Karaoke/releases) lists the exe's SHA-256 and links its VirusTotal scan. Check that your download matches:
+  ```bat
+  certutil -hashfile KaraokeTicker.exe SHA256
+  ```
+- The exe is built from this repository with `build.bat`. To keep antivirus false alarms down, the build compiles its own launcher instead of PyInstaller's shared prebuilt one.
+- The exe isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"* the first time. Click **More info → Run anyway**.
+
 ### Your data and backups
 
 The installed app keeps everything in `%LOCALAPPDATA%\KaraokeTicker\data`: singers, saved songs, history, settings, the music index, the stage window's sign-ins and taught steps.
