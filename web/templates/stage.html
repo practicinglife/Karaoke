@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Karaoke Ticker - Stage</title>
+  {% include "_icons.html" %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/stage.css') }}">
 </head>
 <body>
   <header class="stage-header">
-    <span class="stage-house">{{ house_name }}</span>
+    <span class="stage-house"><img class="brand-logo" src="{{ url_for('static', filename='img/karaoke-ticker-icon-192.png') }}" alt="" width="48" height="48">{{ house_name }}</span>
     <span class="stage-code">House code <strong>{{ house_code }}</strong></span>
   </header>
 

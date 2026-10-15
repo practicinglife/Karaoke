@@ -13,6 +13,7 @@ from pathlib import Path
 
 import customtkinter as ctk
 import qrcode
+from PIL import Image
 
 from app import create_app, create_runtime_state, start_server_thread
 from config import DATA_DIR, AppConfig
@@ -30,13 +31,34 @@ from karaoke.utils import get_lan_ip
 
 logger = logging.getLogger(__name__)
 
+# Bundled with the web pages (web/static/img), so present in source and packaged builds.
+ICON_DIR = Path(__file__).resolve().parent / "web" / "static" / "img"
+APP_ICON = ICON_DIR / "favicon.ico"
+APP_LOGO = ICON_DIR / "karaoke-ticker-icon-192.png"
+
+
+def _use_own_taskbar_icon() -> None:
+    """Show the app's icon on the taskbar button instead of Python's when run from source."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("practicinglife.KaraokeTicker")
+    except Exception:
+        logger.debug("Could not set the taskbar app id", exc_info=True)
+
 
 class KaraokeTickerGUI(ctk.CTk):
     """Main operator GUI."""
 
     def __init__(self) -> None:
+        _use_own_taskbar_icon()
         super().__init__()
         self.title("Karaoke Ticker")
+        if APP_ICON.exists():
+            # Also stops CustomTkinter putting its own icon on the window.
+            self.iconbitmap(default=str(APP_ICON))
         self.geometry("760x760")
         self.resizable(True, True)
 
@@ -53,7 +75,13 @@ class KaraokeTickerGUI(ctk.CTk):
         self.after(350, self._run_first_launch_setup)
 
     def _build_ui(self) -> None:
-        ctk.CTkLabel(self, text="KARAOKE TICKER", font=("Arial", 32, "bold")).pack(pady=20)
+        logo = None
+        if APP_LOGO.exists():
+            image = Image.open(APP_LOGO)
+            logo = ctk.CTkImage(light_image=image, dark_image=image, size=(56, 56))
+        ctk.CTkLabel(
+            self, text="  KARAOKE TICKER", image=logo, compound="left", font=("Arial", 32, "bold")
+        ).pack(pady=20)
 
         self.status_var = ctk.StringVar(value="STOPPED")
         self.house_code_var = ctk.StringVar(value="------")

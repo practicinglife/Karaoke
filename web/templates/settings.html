@@ -4,11 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Karaoke Ticker - Settings</title>
+  {% include "_icons.html" %}
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
   <main class="container">
-    <h1>Settings</h1>
+    <h1><img class="brand-logo" src="{{ url_for('static', filename='img/karaoke-ticker-icon-192.png') }}" alt="" width="48" height="48">Settings</h1>
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       <ul>
