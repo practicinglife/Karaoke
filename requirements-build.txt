@@ -1,0 +1,2 @@
+# Build-only: build.bat installs this from source so the launcher is compiled locally.
+pyinstaller==6.22.3

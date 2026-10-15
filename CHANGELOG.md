@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.4 — 2026-10-15
+
+### Changed
+- The build compiles its own copy of PyInstaller's launcher instead of using the prebuilt one.
+  The prebuilt launcher is shared by many programs, malware included, so a few antivirus
+  scanners flagged KaraokeTicker.exe (1 of 63 on VirusTotal for v1.1.3: Bkav Pro, generic
+  detection). Building it needs the Visual Studio C++ build tools.
+- KaraokeTicker.exe now carries file details (product name, version, publisher) under
+  Properties > Details.
+- `build.bat` can sign the exe when a code-signing certificate is set up (`KT_SIGN_ARGS`).
+
 ## v1.1.3 — 2026-10-15
 
 ### Fixed
