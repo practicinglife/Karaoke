@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.5 — 2026-10-15
 
 ### Added
 - App icon and logo: KaraokeTicker.exe, the desktop app's window and taskbar, browser tabs,
