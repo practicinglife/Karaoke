@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.2 — 2026-10-15
 
 ### Fixed
 - Apple Music songs on albums with an animated cover opened to a blank lyrics screen and
