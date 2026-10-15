@@ -29,6 +29,8 @@ call .venv\Scripts\python.exe check_bootloader.py
 if errorlevel 1 (
   echo Compiling PyInstaller's launcher from source...
   set "PYINSTALLER_COMPILE_BOOTLOADER=1"
+  rem First run installs PyInstaller's own dependencies; the second rebuilds just PyInstaller.
+  call .venv\Scripts\python.exe -m pip install --no-binary pyinstaller --no-cache-dir -r requirements-build.txt
   call .venv\Scripts\python.exe -m pip install --force-reinstall --no-deps --no-binary pyinstaller --no-cache-dir -r requirements-build.txt
   set "PYINSTALLER_COMPILE_BOOTLOADER="
   call .venv\Scripts\python.exe check_bootloader.py
