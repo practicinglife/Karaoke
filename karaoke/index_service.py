@@ -322,6 +322,7 @@ class BackgroundIndexer:
             self._set_status(status="Idle (waiting for scan request)")
             self._set_progress(0.0, "Idle")
         while not self._stop.is_set():
+            indexed = False
             try:
                 with self.runtime_state.db.session_scope() as session:  # type: ignore[attr-defined]
                     folder = get_setting(session, "karaoke_folder")
@@ -356,9 +357,13 @@ class BackgroundIndexer:
                         # Only index on explicit scan request, or when a deferred scan is pending.
                         if requested_index_now or self._deferred_index:
                             self._run_index_pass(session, run_root, selected_manifest)
+                            indexed = not self._deferred_index  # False while the house defers it
                         elif not compare_requested:
                             self._set_status(status="Idle (waiting for scan request)")
                             self._set_progress(0.0, "Idle")
+                # A scan rewrites many rows; shrink the log once its transaction has closed.
+                if indexed:
+                    self.runtime_state.db.checkpoint()  # type: ignore[attr-defined]
             except Exception:
                 self._set_status(status="Indexer error")
                 try:

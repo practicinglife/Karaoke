@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 Base = declarative_base()
 
+WAL_SIZE_LIMIT_BYTES = 64 * 1024 * 1024
+
 
 def _sqlite_pragmas(dbapi_connection, _record) -> None:
     """WAL lets the GUI, web pages and indexer read while a library scan is writing."""
@@ -19,6 +21,9 @@ def _sqlite_pragmas(dbapi_connection, _record) -> None:
     try:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
+        # SQLite reuses the WAL after each checkpoint but never shrinks the file on its
+        # own, so one huge write (a library cleanup, VACUUM) would leave it that size forever.
+        cursor.execute(f"PRAGMA journal_size_limit={WAL_SIZE_LIMIT_BYTES}")
     finally:
         cursor.close()
 
@@ -93,6 +98,7 @@ class DatabaseManager:
         """Create all known schema objects."""
         Base.metadata.create_all(self.engine)
         self._dedupe_karaoke_library()
+        self.checkpoint()
 
     def _dedupe_karaoke_library(self) -> None:
         """One-time migration for databases created before the unique primary_file index."""
@@ -127,6 +133,26 @@ class DatabaseManager:
         target = db_file.parent / "backups" / f"pre-cleanup-{utcnow().strftime('%Y-%m-%d_%H%M%S')}.db"
         copy_database(db_file, target)
         logging.info("Backed up database before library cleanup: %s", target)
+
+    def checkpoint(self) -> bool:
+        """Fold the write-ahead log into the database file and shrink it to zero bytes.
+
+        Safe at any time: if other connections are still busy after the 30 s timeout,
+        the log is left for the next try. Returns True when it was fully truncated.
+        """
+        if self.engine.dialect.name != "sqlite":
+            return True
+        try:
+            with self.engine.connect() as conn:
+                busy, log_frames, done_frames = conn.exec_driver_sql(
+                    "PRAGMA wal_checkpoint(TRUNCATE)"
+                ).one()
+        except Exception:
+            logging.exception("WAL checkpoint failed")
+            return False
+        if busy:
+            logging.info("WAL checkpoint deferred: database busy (%s/%s frames)", done_frames, log_frames)
+        return not busy
 
     @contextmanager
     def session_scope(self) -> Iterator[Session]:
