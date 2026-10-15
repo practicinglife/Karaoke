@@ -166,8 +166,16 @@ The stage window signs in to your streaming services once and remembers it.
   ```bat
   certutil -hashfile KaraokeTicker.exe SHA256
   ```
-- The exe is built from this repository with `build.bat`. To keep antivirus false alarms down, the build compiles its own launcher instead of PyInstaller's shared prebuilt one.
-- The exe isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"* the first time. Click **More info → Run anyway**.
+- The exe is built from this repository with `build.bat`, also on GitHub's servers by the [build workflow](.github/workflows/build.yml) for every change. To keep antivirus false alarms down, the build compiles its own launcher instead of PyInstaller's shared prebuilt one.
+- The exe isn't code-signed yet, so Windows SmartScreen may say *"Windows protected your PC"* the first time. Click **More info → Run anyway**. See the [Code signing policy](#code-signing-policy).
+
+### Uninstalling
+
+Karaoke Ticker doesn't install anything into Windows. To remove it:
+
+1. Click **EXIT** in the app.
+2. Optional: click **BACKUP USER DATA** first and keep the backup if you may want your singers and songs again.
+3. Delete `KaraokeTicker.exe` and the folder `%LOCALAPPDATA%\KaraokeTicker` (paste that into the File Explorer address bar).
 
 ### Your data and backups
 
@@ -237,6 +245,23 @@ tests/          Automated tests
 - **Stage controller** (Playwright): drives a normal Microsoft Edge window over its DevTools port. It loads songs, runs each service's steps, watches the page's own media player for the end of the song, and runs the intermission/ready cycle.
 
 More in [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org). *(The application is under review; until it is approved, releases are unsigned.)*
+
+- Every release exe is built from this repository by the [build workflow](.github/workflows/build.yml) on GitHub Actions.
+- **Committers and reviewers:** [practicinglife](https://github.com/practicinglife)
+- **Approvers:** [practicinglife](https://github.com/practicinglife) approves each release before it is signed.
+- **Privacy:** see [Privacy](#privacy).
+
+## Privacy
+
+This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it.
+
+- Guests' phones talk only to the Karaoke Ticker computer on your own network.
+- Music services (YouTube, YouTube Music, Spotify, Apple Music) are contacted only when you add or play their songs, in the stage browser window where you sign in yourself. Their own privacy policies apply.
+- Singers, songs and settings stay on the computer in `%LOCALAPPDATA%\KaraokeTicker`.
 
 ## Contributing
 
