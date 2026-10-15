@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.3 — 2026-10-15
+
+### Fixed
+- The database's write-ahead log (`karaoke.db-wal`) stayed at about 540 MB after the
+  one-time library cleanup. SQLite never shrinks that file on its own; it's now capped at
+  64 MB and emptied at startup, after a library scan and on exit.
+
 ## v1.1.2 — 2026-10-15
 
 ### Fixed
