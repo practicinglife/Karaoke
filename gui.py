@@ -319,6 +319,7 @@ class KaraokeTickerGUI(ctk.CTk):
             self.runtime_state.stage.close(wait_seconds=20)
         except Exception:
             logger.exception("Could not close the stage window")
+        self.runtime_state.db.checkpoint()
         self.destroy()
 
     def backup_user_data(self) -> None:
