@@ -1,0 +1,63 @@
+# Builds KaraokeTicker.exe on GitHub's Windows servers from this repository, so every
+# release binary can be traced to its source (required for SignPath Foundation signing).
+# Public repositories don't pay for these Actions minutes.
+name: build
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Create virtual environment
+        shell: cmd
+        run: python -m venv .venv
+
+      - name: Run tests
+        shell: cmd
+        run: |
+          .venv\Scripts\python.exe -m pip install -r requirements.txt
+          .venv\Scripts\python.exe -m pytest -q
+
+      # build.bat compiles PyInstaller's launcher with the runner's Visual Studio, builds the
+      # exe and runs its self-test (opens the stage screen in the runner's Microsoft Edge).
+      - name: Build KaraokeTicker.exe
+        shell: cmd
+        run: call build.bat
+
+      - name: SHA-256
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash dist\KaraokeTicker.exe -Algorithm SHA256).Hash.ToLower()
+          "KaraokeTicker.exe SHA-256: $hash" | Tee-Object -FilePath dist\SHA256.txt
+          "**KaraokeTicker.exe SHA-256:** ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload exe
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: KaraokeTicker-unsigned
+          path: |
+            dist/KaraokeTicker.exe
+            dist/SHA256.txt
+          if-no-files-found: error
+
+      # Once SignPath Foundation approves the project, a signing step goes here
+      # (signpath/github-action-submit-signing-request), using the uploaded artifact
+      # (steps.upload.outputs.artifact-id) and a SIGNPATH_API_TOKEN repository secret.
+      # Every signing request then waits for Dale's approval in SignPath.
