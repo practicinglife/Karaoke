@@ -1,3 +1,5 @@
+<p align="center"><img src="web/static/img/karaoke-ticker-icon-192.png" alt="Karaoke Ticker logo" width="128" height="128"></p>
+
 # Karaoke Ticker
 
 **Karaoke Ticker doesn't just manage the karaoke queue. It runs the karaoke show.**

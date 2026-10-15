@@ -64,6 +64,7 @@ rem driver (node.exe + package) is bundled. It drives the installed Microsoft Ed
 rem browser download is needed.
 call .venv\Scripts\pyinstaller.exe --noconfirm --clean --onefile --windowed --name KaraokeTicker ^
   --version-file version_info.txt ^
+  --icon web\static\img\favicon.ico ^
   --hidden-import engineio.async_drivers.threading ^
   --hidden-import simple_websocket ^
   --hidden-import keyboard ^

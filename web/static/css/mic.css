@@ -97,3 +97,12 @@ body {
   font-size: 1.2rem;
   color: #7ec8ff;
 }
+
+/* App logo beside page titles. */
+.brand-logo {
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  border-radius: 22%;
+}

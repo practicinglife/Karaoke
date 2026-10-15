@@ -367,3 +367,12 @@ a {
   padding: 8px;
   border-radius: 8px;
 }
+
+/* App logo beside page titles. */
+.brand-logo {
+  width: 1.4em;
+  height: 1.4em;
+  margin-right: 0.4em;
+  vertical-align: middle;
+  border-radius: 22%;
+}
