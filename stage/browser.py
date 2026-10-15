@@ -154,13 +154,24 @@ def _merge_json_file(path: Path, updates: dict[str, Any]) -> None:
         logger.warning("Could not update stage browser settings in %s", path)
 
 
+# Content-setting value 2 = block. Edge asks "Look for and connect to devices on your local
+# network?" when YouTube searches for Cast devices; the stage never casts.
+LOCAL_NETWORK_SETTINGS = {"local_network": 2, "loopback_network": 2, "local_network_access": 2}
+
+
 def quiet_stage_prompts(profile_dir: Path) -> None:
-    """Turn off Edge's "Translate this page?" popup in the stage profile.
+    """Turn off Edge's "Translate this page?" and local-network-devices popups in the stage profile.
 
     ("Open the Spotify app?" can't be switched off per profile; media_watch.js stops pages
     from asking instead.)
     """
-    _merge_json_file(Path(profile_dir) / "Default" / "Preferences", {"translate": {"enabled": False}})
+    _merge_json_file(
+        Path(profile_dir) / "Default" / "Preferences",
+        {
+            "translate": {"enabled": False},
+            "profile": {"default_content_setting_values": dict(LOCAL_NETWORK_SETTINGS)},
+        },
+    )
 
 
 def disable_background_mode(profile_dir: Path) -> None:
@@ -218,6 +229,15 @@ def resolve_spec(spec: dict[str, Any], params: dict[str, str]) -> dict[str, Any]
             continue
         steps.append(step)
     return {**spec, "steps": steps}
+
+
+def _describe(step: dict[str, Any]) -> str:
+    """Short text for a step in the log."""
+    if "click" in step:
+        return f"click {step['click'][0] if step['click'] else ''}"
+    if "press" in step:
+        return f"press {step['press']}"
+    return ", ".join(f"{key}={value}" for key, value in step.items())
 
 
 def _free_port() -> int:
@@ -340,7 +360,8 @@ class StageBrowser:
                 "--no-first-run",
                 "--no-default-browser-check",
                 "--hide-crash-restore-bubble",
-                "--disable-features=Translate",
+                # One flag only: Chromium honours just the last --disable-features.
+                "--disable-features=Translate,LocalNetworkAccessChecks",
                 *extra_args,
                 "about:blank",
             ]
@@ -526,10 +547,14 @@ class StageBrowser:
             "title": "",
             "manual": not automate,
         }
+        logger.info("Stage loading %s song %s%s: %s", service, play_id, "" if automate else " (manual)", url)
         self._goto(page, url)
         page.evaluate(
-            "selectors => { window.__ktBusySelectors = selectors; }",
-            [sel for sel in spec.get("busy", []) if not sel.startswith("role=")],
+            "([busy, ignore]) => { window.__ktBusySelectors = busy; window.__ktIgnoreMedia = ignore; }",
+            [
+                [sel for sel in spec.get("busy", []) if not sel.startswith("role=")],
+                [sel for sel in spec.get("ignore_media", []) if not sel.startswith("role=")],
+            ],
         )
         missing = self._run_steps(page, spec)
         if missing and self._watch:
@@ -538,6 +563,7 @@ class StageBrowser:
 
     def _run_steps(self, page, spec: dict[str, Any]) -> str:
         """Run the service's steps; returns the first required selector list that was missing."""
+        play_click: dict[str, Any] | None = None  # the last "start playback" click, for one retry
         for step in spec.get("steps", []):
             if not self._commands.empty():
                 return ""  # superseded by a newer command
@@ -548,22 +574,34 @@ class StageBrowser:
                 if self._is_fullscreen(page, step["unless"]):
                     continue
                 # Players ignore (or half-apply) fullscreen until the song is really
-                # playing, so wait for playback and let the player settle first.
-                self._wait_playing(page, 10)
+                # playing, so wait for playback and let the player settle first. Never open
+                # lyrics/fullscreen over a song that isn't playing: it leaves a blank screen.
+                if not self._wait_playing(page, 10):
+                    logger.info("Stage step skipped, song isn't playing: %s", _describe(step))
+                    continue
                 page.wait_for_timeout(1000)
                 self._clear_stuck_fullscreen(page, step["unless"])
                 if self._is_fullscreen(page, step["unless"]):
                     continue
             if "wait_playing" in step:
-                self._wait_playing(page, step["wait_playing"] / 1000)
+                seconds = step["wait_playing"] / 1000
+                if not self._wait_playing(page, seconds) and play_click is not None:
+                    # The page may not have been ready for the click (track list still loading).
+                    logger.info("Song didn't start after the play click; clicking it again")
+                    if self._click_first(page, play_click["click"], play_click.get("timeout", 5000) / 1000):
+                        self._wait_playing(page, seconds)
+                play_click = None
             elif "wait" in step:
                 page.wait_for_timeout(step["wait"])
             elif "click" in step:
                 if step.get("when") == "paused" and self._media_state(page).get("playing"):
                     continue
-                if not self._click_first(page, step["click"], step.get("timeout", 5000) / 1000):
-                    if not step.get("optional"):
-                        return ", ".join(step["click"])
+                clicked = self._click_first(page, step["click"], step.get("timeout", 5000) / 1000)
+                logger.info("Stage step %s: %s", "clicked" if clicked else "not found", _describe(step))
+                if clicked and step.get("when") == "paused":
+                    play_click = step
+                if not clicked and not step.get("optional"):
+                    return ", ".join(step["click"])
             elif "press" in step:
                 if step.get("when") == "paused" and self._media_state(page).get("playing"):
                     continue
@@ -573,6 +611,7 @@ class StageBrowser:
                 self._last_automation = time.monotonic()
                 page.keyboard.press(step["press"])
                 self._last_automation = time.monotonic()
+                logger.info("Stage step pressed: %s", _describe(step))
             if step.get("unless"):
                 # Sites apply fullscreen asynchronously; wait so a following fallback
                 # toggle doesn't see "not yet fullscreen" and switch it straight back off.
@@ -622,9 +661,11 @@ class StageBrowser:
                 logger.exception("Could not check the stage window")
         if state.get("started") and not watch["started"]:
             watch["started"] = True
+            logger.info("Stage song %s started: %r", watch["play_id"], state.get("title") or "")
             self.on_event("started", watch["play_id"], "")
         if not watch["started"] and not watch["attention"] and not watch.get("manual") and time.monotonic() > watch["deadline"]:
             watch["attention"] = True
+            logger.info("Stage song %s did not start within %.0f seconds", watch["play_id"], START_TIMEOUT_SECONDS)
             self.on_event("attention", watch["play_id"], "Song did not start. Press play in the stage window.")
         duration = float(state.get("duration") or 0)
         near_end = duration > 5 and float(state.get("position") or 0) >= duration - 0.75 and not state.get("playing")
@@ -638,10 +679,16 @@ class StageBrowser:
             elif watch["title"] and title != watch["title"]:
                 track_changed = True
         if track_changed:
+            logger.info("Stage song %s ended: track changed from %r to %r", watch["play_id"], watch["title"], title)
             self._watch = None
             self.on_event("ended", watch["play_id"], "")
             return
         if watch["started"] and not busy and (state.get("ended") or near_end):
+            logger.info(
+                "Stage song %s ended: %s at %.0f of %.0f seconds",
+                watch["play_id"], "ended event" if state.get("ended") else "near end",
+                float(state.get("position") or 0), duration,
+            )
             self._watch = None
             if 0 < duration <= PREVIEW_SECONDS and watch.get("service") in PREVIEW_SERVICES:
                 # Not signed in: the service played a preview clip, not the song.

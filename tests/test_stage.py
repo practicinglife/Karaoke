@@ -574,3 +574,61 @@ def test_finishing_teach_mode_mid_song_plays_that_song_again(app, stage, tmp_pat
     assert len(plays_after) == len(plays_before) + 1
     assert stage.state == STARTING  # Alice's song again, not the intermission screen
     assert _status(app, item_id) == NOW_PLAYING
+
+
+class _IdlePage:
+    def wait_for_timeout(self, ms: int) -> None:
+        pass
+
+
+def test_play_click_is_retried_once_when_the_song_does_not_start(monkeypatch) -> None:
+    from stage.browser import StageBrowser
+
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: None)
+    clicks: list[str] = []
+    playing = iter([False, False, True])  # paused check (step 1), first wait, wait after retry
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"playing": False})
+    monkeypatch.setattr(browser, "_click_first", lambda page, selectors, seconds: clicks.append(selectors[0]) or True)
+    monkeypatch.setattr(browser, "_wait_playing", lambda page, seconds: next(playing))
+    spec = {"steps": [{"wait_playing": 4000}, {"click": ["row play"], "when": "paused"}, {"wait_playing": 10000}]}
+    assert browser._run_steps(_IdlePage(), spec) == ""
+    assert clicks == ["row play", "row play"]
+
+
+def test_lyrics_and_fullscreen_are_not_opened_when_nothing_is_playing(monkeypatch) -> None:
+    from stage.browser import StageBrowser
+
+    browser = StageBrowser(profile_dir=Path("unused"), on_event=lambda *e: None)
+    clicks: list[str] = []
+    monkeypatch.setattr(browser, "_media_state", lambda page: {"playing": False})
+    monkeypatch.setattr(browser, "_click_first", lambda page, selectors, seconds: clicks.append(selectors[0]) or True)
+    monkeypatch.setattr(browser, "_wait_playing", lambda page, seconds: False)
+    monkeypatch.setattr(browser, "_is_fullscreen", lambda page, check: False)
+    spec = {"steps": [
+        {"click": ["lyrics"], "unless": "[data-testid='lyrics-sidebar']", "optional": True},
+        {"click": ["lyrics full screen"], "unless": "fullscreen", "optional": True},
+    ]}
+    assert browser._run_steps(_IdlePage(), spec) == ""
+    assert clicks == []
+
+
+def test_apple_ignores_animated_album_covers() -> None:
+    assert "amp-ambient-video" in load_selectors()["apple_music"]["ignore_media"]
+    script = (Path(__file__).resolve().parents[1] / "stage" / "media_watch.js").read_text(encoding="utf-8")
+    assert "amp-ambient-video" in script  # also ignored before the app sets the list
+
+
+def test_stage_profile_blocks_local_network_prompt_and_keeps_other_settings(tmp_path) -> None:
+    import json
+
+    from stage.browser import quiet_stage_prompts
+
+    prefs = tmp_path / "Default" / "Preferences"
+    prefs.parent.mkdir(parents=True)
+    prefs.write_text(json.dumps({"profile": {"default_content_setting_values": {"popups": 1}, "name": "Stage"}}))
+    quiet_stage_prompts(tmp_path)
+    data = json.loads(prefs.read_text())
+    values = data["profile"]["default_content_setting_values"]
+    assert values["local_network"] == 2 and values["loopback_network"] == 2 and values["popups"] == 1
+    assert data["profile"]["name"] == "Stage"
+    assert data["translate"]["enabled"] is False
