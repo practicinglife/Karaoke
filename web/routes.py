@@ -151,7 +151,13 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                 "up_next": [serialize_item(i) for i in ordered[:upcoming_count]],
                 "queue_all": [serialize_item(i) for i in ordered],
                 "recent": [serialize_item(i) for i in recent],
+                "played_song_ids": sorted(played_song_ids(db, current.id)),
             }
+
+    def played_song_ids(db, session_id: int) -> set[int]:
+        """Saved songs sung tonight (finished, not skipped), for the "played tonight" marks."""
+        return set(db.scalars(select(QueueItem.song_id).where(
+            QueueItem.session_id == session_id, QueueItem.status == COMPLETED, QueueItem.song_id.is_not(None))))
 
     def serialize_item(item: QueueItem | None) -> dict[str, Any] | None:
         if not item:
@@ -724,6 +730,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                 user=user_rec,
                 songs=songs,
                 queued_song_ids=queued_song_ids,
+                played_song_ids=played_song_ids(db, record.id),
                 house_code=record.house_code,
                 csrf_token=ensure_csrf(),
                 queue_notification_state=user_notification_state(

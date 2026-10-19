@@ -74,7 +74,22 @@
 
     <section class="card">
       <h2>Saved Songs</h2>
-      <p>Tap/click a tile to add that song to queue. Tap it again while queued to remove it.</p>
+      <p>Tap a song to add it to the queue. Tap it again while queued to remove it.</p>
+      <div class="saved-tools" id="saved-tools" data-song-count="{{ songs|length }}"{% if not songs %} hidden{% endif %}>
+        <input type="search" id="saved-find" placeholder="Find in my songs" autocomplete="off" aria-label="Find in my songs">
+        <div class="saved-tools-row">
+          <select id="saved-sort" aria-label="Sort my songs">
+            <option value="newest">Newest added</option>
+            <option value="title">Title A–Z</option>
+            <option value="artist">Artist A–Z</option>
+          </select>
+          <div class="saved-view" role="group" aria-label="Show my songs as">
+            <button type="button" id="saved-view-list" aria-pressed="false">LIST</button>
+            <button type="button" id="saved-view-tiles" aria-pressed="false">TILES</button>
+          </div>
+        </div>
+        <p class="saved-none" id="saved-none" hidden>None of your saved songs match.</p>
+      </div>
       <label>
         <input type="checkbox" id="delete-mode-toggle">
         Delete mode
@@ -84,8 +99,11 @@
         <div class="song-tiles" id="song-tiles">
           {% for song in songs %}
           <div
-            class="song-tile{% if song.id in queued_song_ids %} queued-song{% endif %}"
+            class="song-tile{% if song.id in queued_song_ids %} queued-song{% endif %}{% if song.id in played_song_ids %} played-song{% endif %}"
             data-song-id="{{ song.id }}"
+            data-order="{{ loop.index0 }}"
+            data-title="{{ song.title }}"
+            data-artist="{{ song.artist }}"
             data-queue-url="{{ url_for('web.queue_add', song_id=song.id) }}"
             tabindex="0"
             role="button"
@@ -98,6 +116,7 @@
               {% if song.service == 'apple_music' %}Apple Music{% elif song.service == 'youtube' %}YouTube{% elif song.service == 'spotify' %}Spotify{% elif song.service == 'traditional' %}Traditional{% else %}{{ song.service }}{% endif %}
             </div>
             <div class="song-tile-badge" {% if song.id not in queued_song_ids %}hidden{% endif %}>Queued tonight</div>
+            <div class="song-tile-played" {% if song.id not in played_song_ids or song.id in queued_song_ids %}hidden{% endif %}>✓ PLAYED TONIGHT</div>
           </div>
           {% endfor %}
         </div>

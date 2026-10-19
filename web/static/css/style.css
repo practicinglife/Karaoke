@@ -470,3 +470,133 @@ a {
   padding: 0.45rem 0.8rem;
   font-weight: 700;
 }
+
+/* Saved songs: find, sort, list or tiles; queued first, played tonight last */
+.saved-tools {
+  margin: 0.5rem 0;
+}
+
+.saved-tools-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.saved-tools-row select {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.saved-view {
+  display: flex;
+  flex: none;
+}
+
+.saved-view button {
+  margin-top: 0;
+  border-radius: 0;
+  font-weight: 700;
+}
+
+.saved-view button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.saved-view button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: 0;
+}
+
+.saved-view button[aria-pressed="true"] {
+  background: #3a3a3a;
+  border-color: #7ec8ff;
+}
+
+.saved-none {
+  color: #9a9a9a;
+  margin: 0.5rem 0 0;
+}
+
+.song-tile[hidden] {
+  display: none;
+}
+
+.song-tile-played {
+  align-self: flex-start;
+  margin-top: auto;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #3ecf6e;
+  background: rgba(62, 207, 110, 0.16);
+  color: #9af0b6;
+}
+
+.song-tile.played-song:not(.queued-song) {
+  border-color: #2f6b45;
+  background: #161b17;
+}
+
+.song-tile.played-song:not(.queued-song) .song-tile-title,
+.song-tile.played-song:not(.queued-song) .song-tile-artist {
+  color: #a9b7ad;
+}
+
+/* List view: one slim row per song */
+.song-tiles.song-list-view {
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+}
+
+.song-list-view .song-tile {
+  aspect-ratio: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title service"
+    "artist badge";
+  align-items: center;
+  column-gap: 0.6rem;
+  row-gap: 0.15rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+}
+
+.song-list-view .song-tile-title {
+  grid-area: title;
+  display: block;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.song-list-view .song-tile-artist {
+  grid-area: artist;
+}
+
+.song-list-view .song-tile-service {
+  grid-area: service;
+  justify-self: end;
+  margin-top: 0;
+}
+
+.song-list-view .song-tile-badge,
+.song-list-view .song-tile-played {
+  grid-area: badge;
+  justify-self: end;
+  margin-top: 0;
+}
+
+.song-tiles.song-list-view.delete-mode .song-tile {
+  padding-left: 2.2rem;
+}
+
+.song-list-view .song-delete-checkbox {
+  top: 50%;
+  left: 0.7rem;
+  right: auto;
+  transform: translateY(-50%);
+}

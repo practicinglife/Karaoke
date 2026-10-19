@@ -15,6 +15,12 @@ const bulkDeleteForm = document.getElementById("bulk-delete-form");
 const userCsrfToken = document.getElementById("user-csrf-token");
 const bulkUploadToggle = document.getElementById("bulk-upload-toggle");
 const bulkUploadPanel = document.getElementById("bulk-upload-panel");
+const savedTools = document.getElementById("saved-tools");
+const savedFind = document.getElementById("saved-find");
+const savedSort = document.getElementById("saved-sort");
+const savedViewList = document.getElementById("saved-view-list");
+const savedViewTiles = document.getElementById("saved-view-tiles");
+const savedNone = document.getElementById("saved-none");
 
 let searchController = null;
 let lastSearchQuery = "";
@@ -24,6 +30,9 @@ let lastUserQueueNotificationKey = "none||";
 const QUEUED_SONG_ARIA_SUFFIX = ", queued tonight, click again to remove from queue";
 const UP_NEXT_NOTIFICATION_TEXT = "UP NEXT!!";
 const UP_NOW_NOTIFICATION_TEXT = "UP NOW!!";
+const SAVED_VIEW_KEY = "kt-saved-songs-view";
+const SAVED_SORT_KEY = "kt-saved-songs-sort";
+const LIST_VIEW_FROM = 11; // more than 10 saved songs start as a list
 
 function getQueuedSongBaseLabel(tile) {
   const existing = tile.dataset.baseAriaLabel;
@@ -49,13 +58,112 @@ function setQueuedSongState(tile, queued) {
   tile.setAttribute("aria-label", queued ? `${baseLabel}${QUEUED_SONG_ARIA_SUFFIX}` : baseLabel);
 }
 
-function applyQueuedSongState(queuedIds) {
+function setPlayedSongState(tile, played) {
+  if (!(tile instanceof HTMLElement)) return;
+  tile.classList.toggle("played-song", played);
+  const mark = tile.querySelector(".song-tile-played");
+  if (mark instanceof HTMLElement) {
+    // Queued again after singing it: "Queued tonight" wins.
+    mark.hidden = !played || tile.classList.contains("queued-song");
+  }
+}
+
+function applyQueuedSongState(queuedIds, playedIds = null) {
   if (!songTilesEl) return;
-  const normalized = new Set(Array.from(queuedIds, (value) => String(value)));
+  const queued = new Set(Array.from(queuedIds, (value) => String(value)));
+  const played = playedIds ? new Set(Array.from(playedIds, (value) => String(value))) : null;
   songTilesEl.querySelectorAll(".song-tile").forEach((tile) => {
     const songId = tile.getAttribute("data-song-id") || "";
-    setQueuedSongState(tile, normalized.has(songId));
+    setQueuedSongState(tile, queued.has(songId));
+    setPlayedSongState(tile, played ? played.has(songId) : tile.classList.contains("played-song"));
   });
+  arrangeSavedSongs();
+}
+
+// ----- saved songs: find, sort, list or tiles -----------------------------------
+
+function readPref(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writePref(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (_error) {
+    // private browsing: the choice just isn't remembered
+  }
+}
+
+function plainText(value) {
+  return String(value || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}
+
+// Queued tonight first, then the rest, then songs already played tonight at the bottom.
+function songBand(tile) {
+  if (tile.classList.contains("queued-song")) return 0;
+  if (tile.classList.contains("played-song")) return 2;
+  return 1;
+}
+
+function compareSongs(a, b, sort) {
+  const byTitle = plainText(a.dataset.title).localeCompare(plainText(b.dataset.title));
+  const byArtist = plainText(a.dataset.artist).localeCompare(plainText(b.dataset.artist));
+  if (sort === "title") return byTitle || byArtist;
+  if (sort === "artist") return byArtist || byTitle;
+  return Number(a.dataset.order || 0) - Number(b.dataset.order || 0);
+}
+
+function arrangeSavedSongs() {
+  if (!songTilesEl) return;
+  const sort = savedSort instanceof HTMLSelectElement ? savedSort.value : "newest";
+  const query = savedFind instanceof HTMLInputElement ? plainText(savedFind.value.trim()) : "";
+  const tiles = Array.from(songTilesEl.querySelectorAll(".song-tile"));
+  tiles.sort((a, b) => songBand(a) - songBand(b) || compareSongs(a, b, sort));
+  let shown = 0;
+  for (const tile of tiles) {
+    const matches = !query || plainText(`${tile.dataset.title} ${tile.dataset.artist}`).includes(query);
+    tile.hidden = !matches;
+    if (matches) shown += 1;
+    songTilesEl.appendChild(tile);
+  }
+  if (savedNone) savedNone.hidden = !query || shown > 0;
+}
+
+function setSavedView(view) {
+  if (!songTilesEl) return;
+  const list = view === "list";
+  songTilesEl.classList.toggle("song-list-view", list);
+  if (savedViewList) savedViewList.setAttribute("aria-pressed", list ? "true" : "false");
+  if (savedViewTiles) savedViewTiles.setAttribute("aria-pressed", list ? "false" : "true");
+}
+
+function setupSavedSongs() {
+  if (!songTilesEl || !savedTools) return;
+  const count = Number(savedTools.dataset.songCount || 0);
+  const view = readPref(SAVED_VIEW_KEY) || (count >= LIST_VIEW_FROM ? "list" : "tiles");
+  setSavedView(view);
+  const sort = readPref(SAVED_SORT_KEY);
+  if (savedSort instanceof HTMLSelectElement && sort && savedSort.querySelector(`option[value="${sort}"]`)) {
+    savedSort.value = sort;
+  }
+  savedViewList?.addEventListener("click", () => {
+    setSavedView("list");
+    writePref(SAVED_VIEW_KEY, "list");
+  });
+  savedViewTiles?.addEventListener("click", () => {
+    setSavedView("tiles");
+    writePref(SAVED_VIEW_KEY, "tiles");
+  });
+  savedSort?.addEventListener("change", () => {
+    writePref(SAVED_SORT_KEY, savedSort.value);
+    arrangeSavedSongs();
+  });
+  savedFind?.addEventListener("input", arrangeSavedSongs);
+  arrangeSavedSongs();
 }
 
 function updateServiceUi() {
@@ -485,14 +593,14 @@ if (songTilesEl && window.io) {
   const socket = window.io();
   socket.on("queue_updated", (payload) => {
     const queuedIds = new Set();
-    if (payload && Array.isArray(payload.queue_all)) {
-      for (const item of payload.queue_all) {
-        if (item && item.song_id !== undefined && item.song_id !== null) {
-          queuedIds.add(String(item.song_id));
-        }
+    const items = [...(Array.isArray(payload?.queue_all) ? payload.queue_all : []), payload?.now_playing];
+    for (const item of items) {
+      if (item && item.song_id !== undefined && item.song_id !== null) {
+        queuedIds.add(String(item.song_id));
       }
     }
-    applyQueuedSongState(queuedIds);
+    const playedIds = Array.isArray(payload?.played_song_ids) ? payload.played_song_ids : null;
+    applyQueuedSongState(queuedIds, playedIds);
     window.dispatchEvent(new CustomEvent("karaoke:queue-updated", { detail: payload }));
   });
   socket.on("stage_state", (payload) => {
@@ -501,5 +609,6 @@ if (songTilesEl && window.io) {
 }
 
 setDeleteMode(false);
+setupSavedSongs();
 updateServiceUi();
 
