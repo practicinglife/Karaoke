@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.1.10 — 2026-10-19
+
+### Fixed
+- **Find in my songs works in list view.** Songs that didn't match stayed on screen in the
+  list setting (only tiles filtered); they now disappear in both.
+
+### Changed
+- **Saved songs start collapsed:** the first 8 show (queued tonight first) with **SHOW ALL
+  n SONGS** underneath, so singers don't scroll past their whole list. Finding and Delete
+  mode show every matching song.
+
 ## v1.1.9 — 2026-10-19
 
 ### Changed
