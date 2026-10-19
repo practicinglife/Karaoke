@@ -162,3 +162,30 @@ def test_videos_named_without_artist_take_it_from_their_tags(app, tmp_path: Path
         named = db.scalar(select(KaraokeLibrary).where(KaraokeLibrary.title == "The Dance"))
         assert named.artist == "Garth Brooks"
     assert seen == ["Can I Come Over.mp4"]  # files already named "Artist - Title" aren't opened
+
+
+def test_refresh_relinks_saved_songs_to_moved_files_and_drops_disc_codes(app) -> None:
+    from karaoke.library_indexer import repair_saved_songs
+    from karaoke.models import KaraokeLibrary, Song
+    from karaoke.services import create_or_get_user
+
+    def row(path, artist, title, active):
+        return KaraokeLibrary(title=title, artist=artist, display_name=f"{artist} - {title}", primary_file=path,
+                              folder="x", extension=".mp3+.cdg", modified_time="1", file_size=1, active=active,
+                              search_blob="x")
+
+    with app.runtime_state.db.session_scope() as db:
+        user = create_or_get_user(db, "Kyle")
+        old = row(r"D:\Karaoke\Creed - Weathered [Karaoke].mp3", "Creed", "Weathered [Karaoke]", False)
+        new = row(r"C:\Karaoke\Creed - Weathered [Karaoke].mp3", "Creed", "Weathered [Karaoke]", True)
+        disc = row(r"C:\Karaoke\ACT064-17 - Zach Bryan - Pink Skies.mp3", "ACT064-17", "Zach Bryan - Pink Skies", True)
+        db.add_all([old, new, disc])
+        db.flush()
+        moved = Song(user_id=user.id, title="Weathered [Karaoke]", artist="Creed", service="traditional", karaoke_library_id=old.id)
+        coded = Song(user_id=user.id, title="Zach Bryan - Pink Skies", artist="ACT064-17", service="traditional", karaoke_library_id=disc.id)
+        db.add_all([moved, coded])
+        db.flush()
+        assert repair_saved_songs(db) == 2
+        assert moved.karaoke_library_id == new.id
+        assert (coded.artist, coded.title, coded.karaoke_library_id) == ("Zach Bryan", "Pink Skies", disc.id)
+        assert repair_saved_songs(db) == 0  # nothing left to fix

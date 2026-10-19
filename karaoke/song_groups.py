@@ -17,11 +17,12 @@ import threading
 from collections import Counter
 from dataclasses import dataclass, field
 
+from rapidfuzz import fuzz
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .models import KaraokeLibrary
-from .song_tags import DUET, NOT_A_DUET, SEARCH_WORDS, split_display, split_query
+from .song_tags import DUET, NOT_A_DUET, SEARCH_WORDS, TWO_SINGERS, split_display, split_query
 from .utils import normalize_text
 
 MAX_ARTISTS = 40
@@ -45,6 +46,15 @@ KT_KARAOKE, KT_SING_ALONG = "kt karaoke", "kt sing along"
 # (it has the vocals, so it's never the default).
 RANK_KT_KARAOKE, RANK_VIDEO, RANK_CDG, RANK_MP3, RANK_SING_ALONG = 0, 10, 20, 25, 30
 
+# Merging near-duplicates: names and titles this close (out of 100) are the same, spelled
+# differently ("Kenny Rodgers" / "Kenny Rogers", "Shamless" / "Shameless").
+SAME_NAME_SCORE, SAME_TITLE_SCORE = 92, 90
+MIN_FUZZY_NAME, MIN_FUZZY_TITLE = 8, 6
+# A short title merges into a longer one that starts with it ("Much Too Young" / "Much Too
+# Young To Feel This Damn Old") only from this many words, so "Rodeo" stays apart from
+# "Rodeo Or Mexico".
+MIN_PREFIX_WORDS = 3
+
 
 @dataclass
 class Entry:
@@ -60,11 +70,17 @@ class Entry:
     rank: int
     tags: list[str] = field(default_factory=list)
     blob: str = ""  # artist + title + label words, for matching
+    group_key: str = ""  # the song this file belongs to, after merging spellings
+    group_title: str = ""  # the title shown for that song
+
+    @property
+    def pair_key(self) -> str:
+        # Same singers in any order: "Kenny Rogers & Dolly Parton" = "Dolly Parton & Kenny Rogers".
+        return "+".join(sorted(key for _, key in self.singers))
 
     @property
     def song_key(self) -> str:
-        # Same singers in any order: "Kenny Rogers & Dolly Parton" = "Dolly Parton & Kenny Rogers".
-        return "+".join(sorted(key for _, key in self.singers)) + "|" + self.title_key
+        return f"{self.pair_key}|{self.group_key or self.title_key}"
 
 
 def _key(name: str) -> str:
@@ -82,8 +98,19 @@ def clean_artist(artist: str) -> str:
     return artist
 
 
+def title_core(title: str) -> str:
+    """A title reduced to what makes it that song: "The Change" = "Change, The" = "Change";
+    "Every Now & Then" = "Every Now And Then"; "Goin'" = "Going"; "Til" = "Till"."""
+    text = re.sub(r"(\w)in'(?=\W|$)", r"\1ing", title or "", flags=re.I).replace("&", " and ")
+    key = normalize_text(text)
+    key = re.sub(r"^the |^a | the$", "", key)
+    return re.sub(r"\btil\b", "till", key).strip()
+
+
 def clean_title(title: str) -> str:
-    return re.sub(r"\s+", " ", BRACKETS.sub("", title or "")).strip(" -") or (title or "").strip()
+    cleaned = re.sub(r"\s+", " ", BRACKETS.sub("", title or "")).strip(" -") or (title or "").strip()
+    # Library-style "Red Strokes, The" reads as "The Red Strokes".
+    return re.sub(r"^(.+), (The|A|An)$", r"\2 \1", cleaned, flags=re.I)
 
 
 def singers_of(credit: str, is_duet: bool) -> list[str]:
@@ -132,6 +159,9 @@ def entry_from_row(row_id: int, artist_field: str, title_field: str, display_nam
     tag_list = [t for t in (tags or "").split(",") if t]
     artist = clean_artist(artist_part) or "Unknown artist"
     title = clean_title(song_part)
+    # Duet labels are stored at library refresh; work it out here too so grouping doesn't wait.
+    if DUET not in tag_list and TWO_SINGERS.search(artist) and not NOT_A_DUET.search(artist):
+        tag_list.append(DUET)
     singers = [(name, _key(name)) for name in singers_of(artist, DUET in tag_list)]
     label, rank = version_of(artist_field, title_field or display_name, extension)
     words = " ".join(word for tag in tag_list for word in SEARCH_WORDS.get(tag, ()))
@@ -147,6 +177,7 @@ class GroupedLibrary:
 
     def __init__(self) -> None:
         self._entries: list[Entry] = []
+        self._songs: dict[str, list[Entry]] = {}
         self._signature: tuple | None = None
         self._lock = threading.Lock()
 
@@ -160,7 +191,10 @@ class GroupedLibrary:
                 rows = session.execute(select(
                     KaraokeLibrary.id, KaraokeLibrary.artist, KaraokeLibrary.title, KaraokeLibrary.display_name,
                     KaraokeLibrary.extension, KaraokeLibrary.tags).where(active)).all()
-                self._entries = [entry_from_row(*row) for row in rows]
+                self._entries = merge_spellings([entry_from_row(*row) for row in rows])
+                self._songs = {}
+                for entry in self._entries:
+                    self._songs.setdefault(entry.song_key, []).append(entry)
                 self._signature = signature
             return self._entries
 
@@ -174,18 +208,19 @@ class GroupedLibrary:
         pool = [e for e in self.entries(session) if all(tag in e.tags for tag in wanted_tags)]
         matched = [e for e in pool if all(token in e.blob for token in tokens)]
 
-        # Artists: a singer whose own name contains what's typed (all of it).
+        # Artists: a singer whose own name contains what's typed (all of it). Pairs count once
+        # however they're credited ("Garth Brooks & Trisha Yearwood" = "Trisha Yearwood and Garth Brooks").
         artists: dict[str, dict] = {}
         if rest:
             for entry in matched:
                 names = list(entry.singers)
                 if len(entry.singers) > 1:
-                    names.append((entry.artist, entry.credit_key))  # "Dolly Parton & Kenny Rogers" too
+                    names.append((entry.artist, entry.pair_key))
                 for name, key in names:
-                    if rest in key:
+                    if rest in key.replace("+", " "):
                         group = artists.setdefault(key, {"key": key, "names": Counter(), "songs": set(), "files": 0})
                         group["names"][name] += 1
-                        group["songs"].add(entry.title_key)
+                        group["songs"].add(entry.song_key)
                         group["files"] += 1
         artist_list = sorted(artists.values(), key=lambda g: (not g["key"].startswith(rest), -len(g["songs"]), g["key"]))
         artist_out = [{"key": g["key"], "name": g["names"].most_common(1)[0][0], "songs": len(g["songs"]),
@@ -200,7 +235,9 @@ class GroupedLibrary:
                 return True
             return any(token in entry.title_key for token in tokens) and len(tokens) > 1
 
-        songs = group_songs([e for e in matched if title_hit(e)])
+        # A match brings its whole song, with every spelling ("Friends In Low Place" too).
+        song_keys = {e.song_key for e in matched if title_hit(e)}
+        songs = group_songs([e for key in song_keys for e in self._songs.get(key, [])])
         songs.sort(key=lambda s: (not s["title_key"].startswith(rest), s["title"].lower(), s["artist"].lower()))
         return {"artists": artist_out, "songs": songs[:MAX_SONGS],
                 "more_artists": max(0, len(artist_list) - MAX_ARTISTS), "more_songs": max(0, len(songs) - MAX_SONGS)}
@@ -209,11 +246,97 @@ class GroupedLibrary:
         """Every song of one artist (including duets and featured spots), A-Z, with versions."""
         wanted_tags, _ = split_query(normalize_text(query or ""))
         entries = [e for e in self.entries(session)
-                   if (artist_key == e.credit_key or any(key == artist_key for _, key in e.singers))
+                   if (artist_key == e.pair_key or any(key == artist_key for _, key in e.singers))
                    and all(tag in e.tags for tag in wanted_tags)]
         songs = group_songs(entries)
         songs.sort(key=lambda s: (s["title"].lower(), s["artist"].lower()))
         return songs
+
+
+def _close(a: str, b: str, min_len: int, score: int) -> bool:
+    """Near-identical spellings. Lengths far apart can't reach the score, so they're skipped
+    before the (slower) comparison."""
+    shorter, longer = sorted((len(a), len(b)))
+    if shorter < min_len or 200 * shorter < score * (shorter + longer):
+        return False
+    return fuzz.ratio(a, b) >= score
+
+
+def _merge_keys(counts: Counter, min_fuzzy: int, score: int) -> dict[str, str]:
+    """{key: the key it's the same as}. Most common spellings win; a key joins one with the
+    same letters without spaces ("longneck" = "long neck") or a near-identical spelling.
+    Only keys starting with the same three letters are compared."""
+    canonical: dict[str, str] = {}
+    by_compact: dict[str, str] = {}
+    buckets: dict[str, list[str]] = {}
+    for key, _ in counts.most_common():
+        compact = key.replace(" ", "")
+        target = by_compact.get(compact)
+        if target is None:
+            target = next((other for other in buckets.get(key[:3], []) if _close(key, other, min_fuzzy, score)), None)
+        if target is None:
+            target = key
+            buckets.setdefault(key[:3], []).append(key)
+            by_compact[compact] = key
+        canonical[key] = target
+    return canonical
+
+
+def _same_song(a: str, b: str) -> bool:
+    if a.replace(" ", "") == b.replace(" ", ""):
+        return True
+    short, long_ = sorted((a, b), key=len)
+    if len(short.split()) >= MIN_PREFIX_WORDS and long_.startswith(short + " "):
+        return True
+    return _close(a, b, MIN_FUZZY_TITLE, SAME_TITLE_SCORE)
+
+
+def merge_spellings(entries: list[Entry]) -> list[Entry]:
+    """Treat spellings of the same singer or song as one, for grouping (files are untouched)."""
+    # Singers: "Kenny Rodgers" joins "Kenny Rogers"; the most common spelling is shown.
+    canonical = _merge_keys(Counter(key for e in entries for _, key in e.singers), MIN_FUZZY_NAME, SAME_NAME_SCORE)
+    shown: dict[str, Counter] = {}
+    for entry in entries:
+        for name, key in entry.singers:
+            shown.setdefault(canonical[key], Counter())[name] += 1
+    for entry in entries:
+        merged, seen = [], set()
+        for _, key in entry.singers:
+            target = canonical[key]
+            if target not in seen:
+                seen.add(target)
+                merged.append((shown[target].most_common(1)[0][0], target))
+        entry.singers = merged
+        entry.blob = " ".join(filter(None, [entry.blob, *(key for _, key in merged)]))
+
+    # Songs, within each singer or pair: one song however the title is spelled.
+    by_pair: dict[str, list[Entry]] = {}
+    for entry in entries:
+        by_pair.setdefault(entry.pair_key, []).append(entry)
+    for group in by_pair.values():
+        core_of = {e.id: title_core(e.title) or e.title_key for e in group}
+        cores = Counter(core_of.values())
+        clusters: list[list[str]] = []
+        home: dict[str, int] = {}
+        nearby: dict[str, list[str]] = {}  # titles seen so far, by their first three letters
+        for core, _ in sorted(cores.items(), key=lambda kv: (-kv[1], -len(kv[0]))):
+            match = next((other for other in nearby.get(core[:3], []) if _same_song(core, other)), None)
+            if match is None:
+                home[core] = len(clusters)
+                clusters.append([core])
+            else:
+                home[core] = home[match]
+                clusters[home[core]].append(core)
+            nearby.setdefault(core[:3], []).append(core)
+        titles: dict[int, Counter] = {}
+        for entry in group:
+            titles.setdefault(home[core_of[entry.id]], Counter())[entry.title] += 1
+        for entry in group:
+            n = home[core_of[entry.id]]
+            entry.group_key = clusters[n][0]
+            # The most common spelling is shown (the longer one if tied).
+            entry.group_title = max(titles[n].items(), key=lambda kv: (kv[1], len(kv[0])))[0]
+    return entries
 
 
 def save_title(entry: Entry) -> str:
@@ -239,8 +362,9 @@ def group_songs(entries: list[Entry]) -> list[dict]:
         versions = [e for e in versions if not (e.label in seen_labels or seen_labels.add(e.label))]
         best = versions[0]
         tags = sorted({tag for e in versions for tag in e.tags})
+        title = best.group_title or best.title
         result.append({
-            "title": best.title, "artist": best.artist, "title_key": best.title_key, "tags": tags,
+            "title": title, "artist": best.artist, "title_key": normalize_text(title), "tags": tags,
             "best_id": best.id,
             "versions": [{"id": e.id, "label": e.label, "save_title": save_title(e)} for e in versions],
         })

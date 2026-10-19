@@ -106,3 +106,35 @@ def test_grouped_search_routes_need_a_singer_and_answer_one(client, app) -> None
     songs = client.get(f"/song/search/artist?key={found['artists'][0]['key']}").get_json()
     assert [s["title"] for s in songs] == ["Friends in Low Places"]
     assert songs[0]["versions"][0]["label"] == "CD+G"
+
+
+def test_spellings_of_one_song_merge_but_different_songs_stay_apart() -> None:
+    from karaoke.song_groups import merge_spellings
+
+    titles = ["Change", "Change, The", "The Change", "Every Now & Then", "Every Now And Then",
+              "Ain't Goin' Down", "Ain't Going Down", "Friends In Low Place", "Friends In Low Places",
+              "Shameless", "Shamless", "Long Neck Bottle", "Longneck Bottle", "Much Too Young",
+              "Much Too Young To Feel This Damn Old", "Rodeo", "Rodeo Or Mexico", "Mr. Right", "Mr. Midnight"]
+    entries = merge_spellings([_entry(n, "Garth Brooks", f"{t} [SC Karaoke]") for n, t in enumerate(titles, 1)])
+    songs = {s["title"]: len(s["versions"]) for s in group_songs(entries)}
+    assert len(songs) == 11
+    assert "The Change" in songs and "Change, The" not in songs
+    assert "Friends In Low Places" in songs and "Friends In Low Place" not in songs
+    assert "Rodeo" in songs and "Rodeo Or Mexico" in songs
+    assert "Mr. Right" in songs and "Mr. Midnight" in songs
+
+
+def test_a_pair_is_one_group_however_it_is_credited_and_names_one_letter_off_merge() -> None:
+    from karaoke.song_groups import merge_spellings
+
+    entries = merge_spellings([
+        _entry(1, "Garth Brooks & Trisha Yearwood", "In Another's Eyes [CB Karaoke]"),
+        _entry(2, "Trisha Yearwood & Garth Brooks", "Where Your Road Leads [SC Karaoke]"),
+        _entry(3, "Garth Brooks and Trisha Yearwood", "Squeeze Me In [SC Karaoke]"),
+        _entry(4, "Kenny Rogers", "The Gambler [SC Karaoke]"),
+        _entry(5, "Kenny Rogers", "Lady [SC Karaoke]"),
+        _entry(6, "Kenny Rodgers", "Coward Of The County [SC Karaoke]"),
+    ])
+    assert len({e.pair_key for e in entries[:3]}) == 1
+    assert entries[0].pair_key == "garth brooks+trisha yearwood"
+    assert {key for e in entries[3:] for _, key in e.singers} == {"kenny rogers"}
