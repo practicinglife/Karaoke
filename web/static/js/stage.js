@@ -9,10 +9,13 @@ const countdownEl = document.getElementById("stage-countdown");
 const afterEl = document.getElementById("stage-after");
 const afterListEl = document.getElementById("stage-after-list");
 const fillerEl = document.getElementById("stage-filler");
+const nowPlayingEl = document.getElementById("stage-now-playing");
+const nowPlayingTitleEl = document.getElementById("stage-now-playing-title");
 
 const FILLER_VOLUME = 0.6;
 let stageState = window.KT_STAGE?.state || null;
 let fillerOrder = [];
+let fillerTitles = [];
 let fillerPosition = 0;
 let fadeTimer = null;
 
@@ -87,8 +90,10 @@ async function loadFiller() {
     const res = await fetch(`/stage/filler?token=${encodeURIComponent(stageToken)}`);
     const data = res.ok ? await res.json() : { count: 0 };
     fillerOrder = shuffle(Array.from({ length: data.count || 0 }, (_v, i) => i));
+    fillerTitles = Array.isArray(data.titles) ? data.titles : [];
   } catch (_error) {
     fillerOrder = [];
+    fillerTitles = [];
   }
 }
 
@@ -98,6 +103,7 @@ function playNextFiller() {
   }
   const index = fillerOrder[fillerPosition % fillerOrder.length];
   fillerPosition += 1;
+  nowPlayingTitleEl.textContent = fillerTitles[index] || "";
   fillerEl.src = `/stage/filler/${index}?token=${encodeURIComponent(stageToken)}`;
   fillerEl.play().catch(() => {});
 }
@@ -130,6 +136,13 @@ function fadeOutFiller() {
 }
 
 fillerEl.addEventListener("ended", playNextFiller);
+// Show the break song's name while it plays; hide it when the music stops for a singer.
+fillerEl.addEventListener("playing", () => {
+  nowPlayingEl.hidden = !nowPlayingTitleEl.textContent;
+});
+fillerEl.addEventListener("pause", () => {
+  nowPlayingEl.hidden = true;
+});
 fillerEl.addEventListener("error", () => window.setTimeout(playNextFiller, 1000));
 
 // ----- wiring -------------------------------------------------------------------

@@ -95,6 +95,22 @@ body {
   gap: 0 3rem;
 }
 
+.stage-now-playing {
+  padding: 0 2rem 1.4rem;
+  font-size: 1.4rem;
+  color: #bdbdbd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stage-now-playing-label {
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: #9a9a9a;
+  margin-right: 0.6rem;
+}
+
 @keyframes stage-pulse {
   50% {
     opacity: 0.45;
