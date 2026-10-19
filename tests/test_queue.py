@@ -183,3 +183,13 @@ def test_songs_sung_tonight_are_marked_played_on_the_singer_page(app, client) ->
     snapshot = client.get("/api/queue", headers={"X-Admin-Token": token}).get_json()
     assert snapshot["played_song_ids"] == [sung_id]
     assert [item["song_id"] for item in snapshot["queue_all"]] == [waiting_id]
+
+
+def test_find_in_my_songs_hides_songs_in_list_view_too() -> None:
+    # The list view gives each row display: grid; songs hidden by "Find in my songs" must
+    # still disappear (an equally specific rule later in the file used to win).
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parent.parent / "web" / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    rule = css.split(".song-tiles .song-tile[hidden] {", 1)[1].split("}", 1)[0]
+    assert "display: none !important" in rule
