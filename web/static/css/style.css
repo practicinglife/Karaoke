@@ -519,8 +519,9 @@ a {
   margin: 0.5rem 0 0;
 }
 
-.song-tile[hidden] {
-  display: none;
+/* Songs hidden by "Find in my songs", in tiles and list view alike. */
+.song-tiles .song-tile[hidden] {
+  display: none !important;
 }
 
 .song-tile-played {
@@ -599,4 +600,15 @@ a {
   left: 0.7rem;
   right: auto;
   transform: translateY(-50%);
+}
+
+.saved-more {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0;
+  font-weight: 700;
+}
+
+.saved-more[hidden] {
+  display: none;
 }
