@@ -41,8 +41,37 @@ def _record_from_stem(stem: str) -> dict[str, str]:
     }
 
 
+# Files whose own tags can name the artist when the file name doesn't ("Can I Come Over.mp4").
+TAGGED_EXTENSIONS = {".mp4", ".m4a", ".m4v", ".mp3"}
+
+
+def _artist_title_from_tags(path: Path) -> tuple[str, str]:
+    """Artist and title from the file's own tags (MP4/MP3), or ("", "")."""
+    try:
+        from mutagen import File as read_tags
+
+        tags = read_tags(str(path), easy=True)
+    except Exception:
+        return "", ""
+    if not tags or not tags.tags:
+        return "", ""
+
+    def first(*keys: str) -> str:
+        for key in keys:
+            values = tags.tags.get(key) or []
+            if values and str(values[0]).strip():
+                return str(values[0]).strip()
+        return ""
+
+    return first("artist", "albumartist"), first("title")
+
+
 def _record_from_file(path: Path) -> dict[str, str | int]:
     stem_data = _record_from_stem(path.stem)
+    if not stem_data["artist"] and path.suffix.lower() in TAGGED_EXTENSIONS:
+        artist, title = _artist_title_from_tags(path)
+        if artist:
+            stem_data = _record_from_stem(f"{artist} - {title or stem_data['title']}")
     stat = path.stat()
     return {
         "title": stem_data["title"],
@@ -159,14 +188,15 @@ def build_index(
     present = {str(path).lower() for path in file_list}
 
     session.execute(update(KaraokeLibrary).values(active=False))
-    existing: dict[str, tuple[int, str, int]] = {
-        primary: (row_id, mtime, size)
-        for row_id, primary, mtime, size in session.execute(
+    existing: dict[str, tuple[int, str, int, str]] = {
+        primary: (row_id, mtime, size, artist or "")
+        for row_id, primary, mtime, size, artist in session.execute(
             select(
                 KaraokeLibrary.id,
                 KaraokeLibrary.primary_file,
                 KaraokeLibrary.modified_time,
                 KaraokeLibrary.file_size,
+                KaraokeLibrary.artist,
             )
         )
     }
@@ -204,8 +234,10 @@ def build_index(
             session.add(KaraokeLibrary(**record_data))
             created += 1
             continue
-        row_id, mtime, size = match
-        if mtime == record_data["modified_time"] and size == record_data["file_size"]:
+        row_id, mtime, size, known_artist = match
+        unchanged = mtime == record_data["modified_time"] and size == record_data["file_size"]
+        # An unchanged file is skipped, unless it had no artist and its tags now supply one.
+        if unchanged and (known_artist or not record_data["artist"]):
             unchanged_ids.append(row_id)
             continue
         row = session.get(KaraokeLibrary, row_id)
@@ -281,6 +313,10 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
         primary_file = audio_path or cdg_path or str(Path(folder) / song_name)
 
         stem_data = _record_from_stem(song_name)
+        if not stem_data["artist"] and Path(primary_file).suffix.lower() in TAGGED_EXTENSIONS:
+            artist, title = _artist_title_from_tags(Path(primary_file))
+            if artist:
+                stem_data = _record_from_stem(f"{artist} - {title or stem_data['title']}")
         if has_mp3 and has_cdg:
             extension = ".mp3+.cdg"
         elif has_mps:

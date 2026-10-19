@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Karaoke videos and MP3s whose file name is only the song title ("Can I Come Over.mp4") now
+  get their artist (and title) from the file's own tags, so they show the artist in search
+  instead of asking for it. Files already indexed without an artist are re-read on the next
+  REFRESH KARAOKE LIBRARY.
+
 ## v1.1.5 — 2026-10-15
 
 ### Added

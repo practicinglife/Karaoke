@@ -10,3 +10,4 @@ rapidfuzz==3.9.7
 pytest==8.3.3
 playwright==1.63.0
 keyboard==0.13.5
+mutagen==1.47.0
