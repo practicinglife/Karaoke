@@ -133,3 +133,32 @@ def test_database_uses_wal_so_reads_never_wait_on_a_scan(tmp_path: Path) -> None
     manager.create_all()
     with manager.engine.connect() as conn:
         assert conn.exec_driver_sql("PRAGMA journal_mode").scalar_one().lower() == "wal"
+
+
+def test_videos_named_without_artist_take_it_from_their_tags(app, tmp_path: Path, monkeypatch) -> None:
+    import karaoke.library_indexer as indexer
+
+    folder = tmp_path / "Karaoke"
+    folder.mkdir()
+    (folder / "Can I Come Over.mp4").write_bytes(b"video")
+    (folder / "Garth Brooks - The Dance.mp4").write_bytes(b"video")
+
+    # First scan: tags unreadable (as before this fix) - the row has no artist.
+    monkeypatch.setattr(indexer, "_artist_title_from_tags", lambda path: ("", ""))
+    with app.runtime_state.db.session_scope() as db:
+        build_index(db, str(folder))
+        row = db.scalar(select(KaraokeLibrary).where(KaraokeLibrary.title == "Can I Come Over"))
+        assert row.artist == ""
+
+    # Rescan with tags: the unchanged file is re-read because it had no artist.
+    seen = []
+    monkeypatch.setattr(indexer, "_artist_title_from_tags",
+                        lambda path: seen.append(path.name) or ("Dale Cooper", "Can I Come Over"))
+    with app.runtime_state.db.session_scope() as db:
+        build_index(db, str(folder))
+        row = db.scalar(select(KaraokeLibrary).where(KaraokeLibrary.primary_file.like("%Can I Come Over.mp4")))
+        assert row.artist == "Dale Cooper"
+        assert row.display_name == "Dale Cooper - Can I Come Over"
+        named = db.scalar(select(KaraokeLibrary).where(KaraokeLibrary.title == "The Dance"))
+        assert named.artist == "Garth Brooks"
+    assert seen == ["Can I Come Over.mp4"]  # files already named "Artist - Title" aren't opened

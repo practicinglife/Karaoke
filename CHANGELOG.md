@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Duet and Kids labels** on library songs, searchable: type **duets** (or duet) or **kids**
+  (kid, children) in the song search to list every song with that label, or add a name to narrow
+  it down ("duets dolly", "kids frozen"). Results show [DUET] / [KIDS]. Duets come from discs
+  marked "(Duet)" and two singers credited together (not bands like "Tom Petty & The
+  Heartbreakers"); kids songs from Disney/kids discs, kids' films, artists and nursery songs. The
+  keyword lists are in `karaoke/song_tags.py`. The existing library is labelled once when the
+  app starts (after a backup); later refreshes keep it current.
+
+### Fixed
+- Karaoke videos and MP3s whose file name is only the song title ("Can I Come Over.mp4") now
+  get their artist (and title) from the file's own tags, so they show the artist in search
+  instead of asking for it. Files already indexed without an artist are re-read on the next
+  REFRESH KARAOKE LIBRARY.
+
 ## v1.1.5 — 2026-10-15
 
 ### Added

@@ -112,7 +112,9 @@ function clearSearchResults() {
 function formatTraditionalResultLabel(row) {
   const extension = String(row?.extension || "").toLowerCase();
   const suffix = VIDEO_EXTENSIONS.has(extension) ? " [VIDEO]" : "";
-  return `${row.display_name}${suffix}`;
+  const tags = String(row?.tags || "").split(",").filter(Boolean);
+  const labels = tags.map((tag) => ` [${tag.toUpperCase()}]`).join("");
+  return `${row.display_name}${suffix}${labels}`;
 }
 
 function renderCurrentSearchPage() {

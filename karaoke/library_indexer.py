@@ -11,6 +11,7 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from .models import KaraokeLibrary, Song
+from .song_tags import search_words, split_query, tags_for
 from .utils import normalize_text, split_artist_title_from_name
 from config import DATA_DIR
 
@@ -32,17 +33,48 @@ SUPPORTED_EXTENSIONS = {
 def _record_from_stem(stem: str) -> dict[str, str]:
     artist, title = split_artist_title_from_name(stem)
     display_name = f"{artist} - {title}".strip(" -")
-    normalized_blob = normalize_text(f"{artist} {title} {display_name} {stem}")
+    tags = tags_for(artist, title, display_name or stem, stem)
+    normalized_blob = normalize_text(f"{artist} {title} {display_name} {stem} {search_words(tags)}")
     return {
         "title": title or stem,
         "artist": artist,
         "display_name": display_name or stem,
         "search_blob": normalized_blob,
+        "tags": ",".join(tags),
     }
+
+
+# Files whose own tags can name the artist when the file name doesn't ("Can I Come Over.mp4").
+TAGGED_EXTENSIONS = {".mp4", ".m4a", ".m4v", ".mp3"}
+
+
+def _artist_title_from_tags(path: Path) -> tuple[str, str]:
+    """Artist and title from the file's own tags (MP4/MP3), or ("", "")."""
+    try:
+        from mutagen import File as read_tags
+
+        tags = read_tags(str(path), easy=True)
+    except Exception:
+        return "", ""
+    if not tags or not tags.tags:
+        return "", ""
+
+    def first(*keys: str) -> str:
+        for key in keys:
+            values = tags.tags.get(key) or []
+            if values and str(values[0]).strip():
+                return str(values[0]).strip()
+        return ""
+
+    return first("artist", "albumartist"), first("title")
 
 
 def _record_from_file(path: Path) -> dict[str, str | int]:
     stem_data = _record_from_stem(path.stem)
+    if not stem_data["artist"] and path.suffix.lower() in TAGGED_EXTENSIONS:
+        artist, title = _artist_title_from_tags(path)
+        if artist:
+            stem_data = _record_from_stem(f"{artist} - {title or stem_data['title']}")
     stat = path.stat()
     return {
         "title": stem_data["title"],
@@ -57,6 +89,7 @@ def _record_from_file(path: Path) -> dict[str, str | int]:
         "file_size": int(stat.st_size),
         "active": True,
         "search_blob": stem_data["search_blob"],
+        "tags": stem_data["tags"],
     }
 
 
@@ -117,6 +150,7 @@ def _pair_record(mp3_path: Path, cdg_path: Path) -> dict[str, str | int]:
         "file_size": int(mp3_stat.st_size + cdg_stat.st_size),
         "active": True,
         "search_blob": stem_data["search_blob"],
+        "tags": stem_data["tags"],
     }
 
 
@@ -159,14 +193,16 @@ def build_index(
     present = {str(path).lower() for path in file_list}
 
     session.execute(update(KaraokeLibrary).values(active=False))
-    existing: dict[str, tuple[int, str, int]] = {
-        primary: (row_id, mtime, size)
-        for row_id, primary, mtime, size in session.execute(
+    existing: dict[str, tuple[int, str, int, str, str]] = {
+        primary: (row_id, mtime, size, artist or "", tags or "")
+        for row_id, primary, mtime, size, artist, tags in session.execute(
             select(
                 KaraokeLibrary.id,
                 KaraokeLibrary.primary_file,
                 KaraokeLibrary.modified_time,
                 KaraokeLibrary.file_size,
+                KaraokeLibrary.artist,
+                KaraokeLibrary.tags,
             )
         )
     }
@@ -204,8 +240,11 @@ def build_index(
             session.add(KaraokeLibrary(**record_data))
             created += 1
             continue
-        row_id, mtime, size = match
-        if mtime == record_data["modified_time"] and size == record_data["file_size"]:
+        row_id, mtime, size, known_artist, known_tags = match
+        unchanged = mtime == record_data["modified_time"] and size == record_data["file_size"]
+        # An unchanged file is skipped, unless it had no artist and its tags now supply one,
+        # or its labels changed (the duet/kids lists in song_tags.py were edited).
+        if unchanged and (known_artist or not record_data["artist"]) and known_tags == record_data["tags"]:
             unchanged_ids.append(row_id)
             continue
         row = session.get(KaraokeLibrary, row_id)
@@ -281,6 +320,10 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
         primary_file = audio_path or cdg_path or str(Path(folder) / song_name)
 
         stem_data = _record_from_stem(song_name)
+        if not stem_data["artist"] and Path(primary_file).suffix.lower() in TAGGED_EXTENSIONS:
+            artist, title = _artist_title_from_tags(Path(primary_file))
+            if artist:
+                stem_data = _record_from_stem(f"{artist} - {title or stem_data['title']}")
         if has_mp3 and has_cdg:
             extension = ".mp3+.cdg"
         elif has_mps:
@@ -305,6 +348,7 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
             existing.file_size = 0
             existing.active = True
             existing.search_blob = stem_data["search_blob"]
+            existing.tags = stem_data["tags"]
         else:
             created = KaraokeLibrary(
                 title=stem_data["title"],
@@ -319,6 +363,7 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
                 file_size=0,
                 active=True,
                 search_blob=stem_data["search_blob"],
+                tags=stem_data["tags"],
             )
             session.add(created)
             existing_by_primary[primary_file] = created
@@ -336,6 +381,32 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
     return processed
 
 
+TAG_BROWSE_LIMIT = 10000  # "duets" or "kids" on its own lists every song with that label
+
+
+def search_by_label(session: Session, normalized_query: str, limit: int) -> list[KaraokeLibrary] | None:
+    """Label searches: "duets" lists every duet (A-Z); "duets dolly" narrows them down.
+    Returns None when the query has no label word."""
+    wanted, rest = split_query(normalized_query)
+    if not wanted:
+        return None
+    stmt = select(KaraokeLibrary).where(KaraokeLibrary.active == True)  # noqa: E712
+    for tag in wanted:
+        stmt = stmt.where(KaraokeLibrary.tags.like(f"%{tag}%"))
+    if not rest:
+        return list(session.scalars(stmt.order_by(func.lower(KaraokeLibrary.display_name)).limit(TAG_BROWSE_LIMIT)))
+    scored = []
+    for item in session.scalars(stmt):
+        blob = item.search_blob or ""
+        score = fuzz.token_set_ratio(rest, blob) + (20 if rest in blob else 0)
+        if normalize_text(item.artist or "").startswith(rest):
+            score += 30
+        if score >= 70:
+            scored.append((-score, (item.display_name or "").lower(), item))
+    scored.sort(key=lambda entry: entry[:2])
+    return [item for *_, item in scored[:limit]]
+
+
 def search_library(
     session: Session, query: str, *, limit: int = 20
 ) -> list[KaraokeLibrary]:
@@ -343,6 +414,9 @@ def search_library(
     normalized_query = normalize_text(query)
     if not normalized_query:
         return []
+    labelled = search_by_label(session, normalized_query, limit)
+    if labelled is not None:
+        return labelled
 
     candidates = list(session.scalars(select(KaraokeLibrary).where(KaraokeLibrary.active == True)))  # noqa: E712
     scored: list[tuple[int, KaraokeLibrary]] = []
@@ -364,6 +438,9 @@ def search_library_traditional(
     normalized_query = normalize_text(query or "")
     if not normalized_query:
         return []
+    labelled = search_by_label(session, normalized_query, limit)
+    if labelled is not None:
+        return labelled
 
     tokens = [token for token in normalized_query.split() if token]
     if not tokens:
