@@ -226,7 +226,7 @@ def test_stage_page_and_filler_routes(app, client, stage, tmp_path) -> None:
         set_setting(db, "intermission_folder", str(folder))
     token = _token(app)
     assert client.get(f"/stage?token={token}").status_code == 200
-    assert client.get(f"/stage/filler?token={token}").get_json() == {"count": 1}
+    assert client.get(f"/stage/filler?token={token}").get_json() == {"count": 1, "titles": ["song"]}
     assert client.get(f"/stage/filler/0?token={token}").status_code == 200
     assert client.get(f"/stage/filler/1?token={token}").status_code == 404
     assert client.get("/stage/filler/0").status_code == 403
@@ -507,6 +507,22 @@ def test_settings_page_reports_intermission_music(app, client, stage, tmp_path) 
     with app.runtime_state.db.session_scope() as db:
         set_setting(db, "intermission_folder", str(folder))
     assert b"2 songs found" in client.get(f"/settings?token={token}").data
+
+
+def test_stage_lists_break_song_names(app, client, stage, tmp_path) -> None:
+    token = _token(app)
+    folder = tmp_path / "Break Music"
+    (folder / "Rock").mkdir(parents=True)
+    (folder / "Rock" / "3 Doors Down - Kryptonite.mp3").write_bytes(b"x")
+    (folder / "01 - Johnny Cash - Hurt.flac").write_bytes(b"x")
+    (folder / "50 Cent - In da Club.m4a").write_bytes(b"x")
+    with app.runtime_state.db.session_scope() as db:
+        set_setting(db, "intermission_folder", str(folder))
+    data = client.get(f"/stage/filler?token={token}").get_json()
+    assert data["count"] == 3
+    assert sorted(data["titles"]) == ["3 Doors Down - Kryptonite", "50 Cent - In da Club", "Johnny Cash - Hurt"]
+    page = client.get(f"/stage?token={token}").data
+    assert b'id="stage-now-playing"' in page
 
 
 def test_escape_and_f11_take_over_but_are_never_taught(monkeypatch) -> None:

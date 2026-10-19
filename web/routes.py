@@ -1478,6 +1478,12 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
         )
         return root, tracks[:MAX_FILLER_TRACKS]
 
+    def _filler_title(path: Path) -> str:
+        """What the stage shows while a break song plays: the file name ("Artist - Title"),
+        without a leading track number."""
+        # "01 - Song" / "01. Song" lose the number; "3 Doors Down - ..." and "50 Cent - ..." keep it.
+        return re.sub(r"^\d{1,3}\s*[-.)_]\s+", "", path.stem).replace("_", " ").strip() or path.stem
+
     @bp.get("/stage")
     def stage_page() -> str:
         record = require_admin()
@@ -1547,7 +1553,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
     def stage_filler_list() -> Response:
         _ = require_admin()
         _, tracks = _filler_tracks()
-        return jsonify({"count": len(tracks)})
+        return jsonify({"count": len(tracks), "titles": [_filler_title(path) for path in tracks]})
 
     @bp.get("/stage/filler/<int:index>")
     def stage_filler_track(index: int) -> Response:
