@@ -88,3 +88,13 @@ def test_existing_library_is_labelled_once_on_upgrade(tmp_path: Path) -> None:
         assert "duets" in rows["Islands In The Stream"].search_blob
         assert rows["Jolene"].tags == ""
     assert (tmp_path / "backups").exists()  # backed up before the change
+
+
+def test_band_names_only_count_as_the_first_part_of_the_credit() -> None:
+    from karaoke.song_tags import NOT_A_DUET
+
+    for band in ("Brooks & Dunn", "Simon & Garfunkel", "Big & Rich", "Tom Petty & The Heartbreakers",
+                 "Florence + The Machine", "Mumford & Sons", "Earth, Wind & Fire"):
+        assert NOT_A_DUET.search(band), band
+    for duet in ("Garth Brooks & Trisha Yearwood", "Diana Ross & Lionel Richie", "Tom Petty & Stevie Nicks"):
+        assert not NOT_A_DUET.search(duet), duet

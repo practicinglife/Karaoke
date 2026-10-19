@@ -154,6 +154,49 @@ def _pair_record(mp3_path: Path, cdg_path: Path) -> dict[str, str | int]:
     }
 
 
+def repair_saved_songs(session: Session) -> int:
+    """Keep singers' saved karaoke songs working after the library changes. Returns how many
+    were fixed.
+
+    - A saved song whose file is gone (the karaoke folder moved, e.g. D:\\Karaoke to
+      C:\\Users\\Public\\Downloads\\Karaoke) is pointed at the current file with exactly the same
+      file name. No exact match: it's left alone.
+    - A song saved from a disc-code file ("CBD-105262 - Dolly Parton - Jolene") gets the real
+      artist and title instead of the disc code.
+    """
+    from .song_groups import DISC_CODE, entry_from_row, save_title  # noqa: PLC0415
+
+    saved = list(session.scalars(
+        select(Song).where(Song.service == "traditional", Song.karaoke_library_id.is_not(None))))
+    if not saved:
+        return 0
+    entries = {row.id: row for row in session.scalars(
+        select(KaraokeLibrary).where(KaraokeLibrary.id.in_({song.karaoke_library_id for song in saved})))}
+    current_by_name: dict[str, int | None] = {}
+    if any(not entries.get(song.karaoke_library_id) or not entries[song.karaoke_library_id].active for song in saved):
+        for row_id, primary in session.execute(
+                select(KaraokeLibrary.id, KaraokeLibrary.primary_file).where(KaraokeLibrary.active == True)):  # noqa: E712
+            name = Path(primary).name.lower()
+            current_by_name[name] = None if name in current_by_name else row_id  # same name twice: unsure
+    fixed = 0
+    for song in saved:
+        entry = entries.get(song.karaoke_library_id)
+        changed = False
+        if entry is not None and not entry.active:
+            new_id = current_by_name.get(Path(entry.primary_file).name.lower())
+            if new_id:
+                song.karaoke_library_id = new_id
+                entry = session.get(KaraokeLibrary, new_id)
+                changed = True
+        if entry is not None and DISC_CODE.match((song.artist or "").strip()):
+            cleaned = entry_from_row(entry.id, entry.artist, entry.title, entry.display_name, entry.extension, entry.tags)
+            if cleaned.artist and cleaned.artist != "Unknown artist":
+                song.artist, song.title = cleaned.artist[:255], save_title(cleaned)[:255]
+                changed = True
+        fixed += changed
+    return fixed
+
+
 def _purge_unreferenced_inactive(session: Session) -> None:
     """Delete inactive library rows that no saved song points at."""
     referenced = select(Song.karaoke_library_id).where(Song.karaoke_library_id.is_not(None))
@@ -254,6 +297,8 @@ def build_index(
     for start in range(0, len(unchanged_ids), 500):
         chunk = unchanged_ids[start : start + 500]
         session.execute(update(KaraokeLibrary).where(KaraokeLibrary.id.in_(chunk)).values(active=True))
+    session.flush()
+    repair_saved_songs(session)
     session.flush()
     _purge_unreferenced_inactive(session)
 
@@ -370,6 +415,8 @@ def build_index_from_manifest(session: Session, manifest_path: str) -> int:
 
         processed += 1
 
+    session.flush()
+    repair_saved_songs(session)
     session.flush()
     _purge_unreferenced_inactive(session)
 

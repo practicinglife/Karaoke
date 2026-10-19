@@ -154,3 +154,32 @@ def test_rotation_follows_join_order_not_newest_first(app) -> None:
             "Singer C",
             "Singer A",
         ]
+
+
+def test_songs_sung_tonight_are_marked_played_on_the_singer_page(app, client) -> None:
+    with app.runtime_state.db.session_scope() as db:
+        session = active_session(db)
+        qm = QueueManager(db)
+        user, sung = _seed_song(db, "Missy", "Jolene", "Dolly Parton")
+        _, skipped = _seed_song(db, "Missy", "9 to 5", "Dolly Parton")
+        _, waiting = _seed_song(db, "Missy", "Here You Come Again", "Dolly Parton")
+        qm.mark_status(qm.add_song(session.id, user.id, sung.id).id, COMPLETED)
+        qm.mark_status(qm.add_song(session.id, user.id, skipped.id).id, SKIPPED)
+        qm.add_song(session.id, user.id, waiting.id)
+        code, token, sung_id, skipped_id, waiting_id = session.house_code, session.admin_token, sung.id, skipped.id, waiting.id
+
+    with client.session_transaction() as flask_session:
+        flask_session["csrf_token"] = "test-csrf"
+    client.post("/join", data={"csrf_token": "test-csrf", "code": code, "name": "Missy"})
+    page = client.get("/user").data.decode()
+    tile = page.split(f'data-song-id="{sung_id}"', 1)[0].rsplit("<div", 1)[1]
+    assert "played-song" in tile
+    played_mark = page.split(f'data-song-id="{sung_id}"', 1)[1].split("PLAYED TONIGHT", 1)[0]
+    assert "hidden" not in played_mark.rsplit("<div", 1)[1]
+    skipped_tile = page.split(f'data-song-id="{skipped_id}"', 1)[0].rsplit("<div", 1)[1]
+    assert "played-song" not in skipped_tile  # skipped isn't sung
+    assert 'id="saved-find"' in page and 'id="saved-sort"' in page
+
+    snapshot = client.get("/api/queue", headers={"X-Admin-Token": token}).get_json()
+    assert snapshot["played_song_ids"] == [sung_id]
+    assert [item["song_id"] for item in snapshot["queue_all"]] == [waiting_id]

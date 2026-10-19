@@ -22,14 +22,14 @@ SEARCH_WORDS = {
 DUET_MARK = re.compile(r"\bduet\b", re.I)
 # Two singers credited together: "Kenny Rogers & Dolly Parton", "Johnny Cash With June Carter".
 TWO_SINGERS = re.compile(r"\S\s+(?:&|and|with|duet with|\+)\s+\S", re.I)
-# Bands and duos with "&" in the name that aren't duets.
+# Bands and duos with "&" in the name that aren't duets: "Tom Petty & The Heartbreakers",
+# "Mumford & Sons", and band names that are the whole first part ("Brooks & Dunn",
+# "Simon & Garfunkel"). Only the first part counts, so "Garth Brooks & Trisha Yearwood"
+# and "Diana Ross & Lionel Richie" are still duets.
 NOT_A_DUET = re.compile(
-    r"&\s*(?:the|his|her|sons|friends|co)\b|\band\s+the\b|\bwith\s+the\b"
-    r"|\b(?:earth,? wind|kool|brooks|hall|simon|crosby,? stills|emerson,? lake|blood,? sweat|"
-    r"mumford|hootie|marky mark|huey lewis|tom petty|bob seger|joan jett|bob marley|"
-    r"florence|echo|siouxsie|katrina|prince|peter,? paul|kc|sly|martha|gladys knight|"
-    r"smokey robinson|diana ross|bob dylan|dave matthews|big|montgomery gentry|maddie|"
-    r"dan \+ shay|love and theft|lady and the tramp)\b", re.I
+    r"[&+]\s*(?:the|his|her|sons|friends|co)\b|\band\s+the\b|\bwith\s+the\b"
+    r"|^\s*(?:the\s+)?(?:earth,? wind|kool|brooks|hall|simon|crosby,? stills|emerson,? lake|blood,? sweat|"
+    r"peter,? paul|kc|sly|big|maddie|dan|love|montgomery gentry)\s*(?:&|\+|,|\band\b)", re.I
 )
 
 # ---- kids -------------------------------------------------------------------------------
