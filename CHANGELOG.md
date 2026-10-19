@@ -1,5 +1,31 @@
 # Changelog
 
+## v1.1.9 — 2026-10-19
+
+### Changed
+- **Saved songs are easier to find.** More than 10 saved songs show as a compact list (one
+  slim row per song) instead of big tiles; a LIST / TILES switch lets each phone choose and
+  remembers it. A **Find in my songs** box narrows the list as you type, and songs sort by
+  newest added, title A–Z or artist A–Z. Songs queued tonight show first.
+- **Songs already sung tonight** drop to the bottom with a green **✓ PLAYED TONIGHT** mark,
+  updated live as soon as a song finishes (skipped songs don't count).
+- **Song search merges spellings of the same song**: "The Change" / "Change, The",
+  "&" / "and", "Goin'" / "Going", "Til" / "Till", "Long Neck" / "Longneck", one-letter
+  typos ("Friends In Low Place") and short versions of a longer title ("Much Too Young").
+  One-word titles stay apart ("Rodeo" / "Rodeo Or Mexico"). Artist names one letter off
+  merge ("Kenny Rodgers"), and a pair is one group however it's credited ("Garth Brooks &
+  Trisha Yearwood" = "Trisha Yearwood and Garth Brooks"). "Red Strokes, The" reads as
+  "The Red Strokes".
+
+### Fixed
+- Duets by singers whose name contains a band word ("Garth **Brooks** & Trisha Yearwood",
+  "Diana Ross & Lionel Richie") are labelled duets again; band names only count when they're
+  the whole first part of the credit ("Brooks & Dunn", "Simon & Garfunkel").
+- **REFRESH KARAOKE LIBRARY repairs saved songs**: a saved song whose file moved (for example
+  from D:\Karaoke to C:\Users\Public\Downloads\Karaoke) is pointed at the current file with the
+  same name, so it plays again; songs saved from disc-code files ("CBD-105262 - …") get the
+  real artist and title. Click REFRESH KARAOKE LIBRARY once after upgrading.
+
 ## v1.1.8 — 2026-10-19
 
 ### Changed
