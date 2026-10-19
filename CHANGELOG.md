@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.1.7 — 2026-10-19
+
+### Added
+- The stage's break screen shows **NOW PLAYING** with the name of the break song that's
+  playing (taken from its file name, e.g. "Johnny Cash - Hurt"). It hides when the music
+  fades out for the next singer. Name break songs "Artist - Title" for the best result.
+
 ## v1.1.6 — 2026-10-19
 
 ### Added
