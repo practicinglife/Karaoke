@@ -21,6 +21,7 @@ const savedSort = document.getElementById("saved-sort");
 const savedViewList = document.getElementById("saved-view-list");
 const savedViewTiles = document.getElementById("saved-view-tiles");
 const savedNone = document.getElementById("saved-none");
+const savedMore = document.getElementById("saved-more");
 
 let searchController = null;
 let lastSearchQuery = "";
@@ -33,6 +34,8 @@ const UP_NOW_NOTIFICATION_TEXT = "UP NOW!!";
 const SAVED_VIEW_KEY = "kt-saved-songs-view";
 const SAVED_SORT_KEY = "kt-saved-songs-sort";
 const LIST_VIEW_FROM = 11; // more than 10 saved songs start as a list
+const COLLAPSED_SONGS = 8; // saved songs shown before SHOW ALL
+let savedExpanded = false;
 
 function getQueuedSongBaseLabel(tile) {
   const existing = tile.dataset.baseAriaLabel;
@@ -123,14 +126,25 @@ function arrangeSavedSongs() {
   const query = savedFind instanceof HTMLInputElement ? plainText(savedFind.value.trim()) : "";
   const tiles = Array.from(songTilesEl.querySelectorAll(".song-tile"));
   tiles.sort((a, b) => songBand(a) - songBand(b) || compareSongs(a, b, sort));
+  // Collapsed: the first few songs only, unless finding, deleting or SHOW ALL was tapped.
+  const showAll = savedExpanded || Boolean(query) || songTilesEl.classList.contains("delete-mode");
   let shown = 0;
+  let matching = 0;
   for (const tile of tiles) {
     const matches = !query || plainText(`${tile.dataset.title} ${tile.dataset.artist}`).includes(query);
-    tile.hidden = !matches;
-    if (matches) shown += 1;
+    if (matches) matching += 1;
+    const visible = matches && (showAll || matching <= COLLAPSED_SONGS);
+    tile.hidden = !visible;
+    if (visible) shown += 1;
     songTilesEl.appendChild(tile);
   }
-  if (savedNone) savedNone.hidden = !query || shown > 0;
+  if (savedNone) savedNone.hidden = !query || matching > 0;
+  if (savedMore) {
+    const collapsible = !query && !songTilesEl.classList.contains("delete-mode") && tiles.length > COLLAPSED_SONGS;
+    savedMore.hidden = !collapsible;
+    savedMore.textContent = savedExpanded ? "SHOW FEWER ▴" : `SHOW ALL ${tiles.length} SONGS ▾`;
+    savedMore.setAttribute("aria-expanded", savedExpanded ? "true" : "false");
+  }
 }
 
 function setSavedView(view) {
@@ -163,6 +177,11 @@ function setupSavedSongs() {
     arrangeSavedSongs();
   });
   savedFind?.addEventListener("input", arrangeSavedSongs);
+  savedMore?.addEventListener("click", () => {
+    savedExpanded = !savedExpanded;
+    arrangeSavedSongs();
+    if (!savedExpanded) savedTools.scrollIntoView({ block: "nearest" });
+  });
   arrangeSavedSongs();
 }
 
@@ -486,6 +505,7 @@ function setDeleteMode(enabled) {
     songTilesEl.querySelectorAll(".song-tile").forEach((tile) => tile.classList.remove("selected-delete"));
   }
   updateDeleteSelectedState();
+  arrangeSavedSongs(); // delete mode shows every song
 }
 
 function queueSongFromTile(tile) {

@@ -601,3 +601,14 @@ a {
   right: auto;
   transform: translateY(-50%);
 }
+
+.saved-more {
+  display: block;
+  width: 100%;
+  margin: 0.5rem 0;
+  font-weight: 700;
+}
+
+.saved-more[hidden] {
+  display: none;
+}
