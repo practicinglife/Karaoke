@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.6 — 2026-10-19
 
 ### Added
 - **Duet and Kids labels** on library songs, searchable: type **duets** (or duet) or **kids**
