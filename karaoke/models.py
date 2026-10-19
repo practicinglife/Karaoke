@@ -43,6 +43,8 @@ class KaraokeLibrary(Base):
     file_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     search_blob: Mapped[str] = mapped_column(Text, nullable=False)
+    # Labels such as "duet" or "kids" (comma separated); see karaoke/song_tags.py.
+    tags: Mapped[str] = mapped_column(String(40), nullable=True, default="")
 
     songs: Mapped[list["Song"]] = relationship("Song", back_populates="karaoke_library")
 

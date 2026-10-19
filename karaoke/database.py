@@ -98,7 +98,35 @@ class DatabaseManager:
         """Create all known schema objects."""
         Base.metadata.create_all(self.engine)
         self._dedupe_karaoke_library()
+        self._add_library_labels()
         self.checkpoint()
+
+    def _add_library_labels(self) -> None:
+        """One-time migration: add the duet/kids label column and label the existing library,
+        so "duets" and "kids" are searchable without rescanning every file."""
+        columns = {column["name"] for column in inspect(self.engine).get_columns("karaoke_library")}
+        if "tags" in columns:
+            return
+        from .song_tags import search_words, tags_for
+
+        with self.engine.connect() as conn:
+            count = conn.exec_driver_sql("SELECT COUNT(*) FROM karaoke_library").scalar_one()
+        if count:
+            self._backup_before_migration()
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("ALTER TABLE karaoke_library ADD COLUMN tags VARCHAR(40) DEFAULT ''")
+            rows = conn.exec_driver_sql(
+                "SELECT id, artist, title, display_name, primary_file, search_blob FROM karaoke_library"
+            ).fetchall()
+            updates = []
+            for row_id, artist, title, display_name, primary_file, blob in rows:
+                stem = (primary_file or "").replace("\\", "/").rsplit("/", 1)[-1].rsplit(".", 1)[0]
+                tags = tags_for(artist or "", title or "", display_name or "", stem)
+                if tags:
+                    updates.append((",".join(tags), f"{blob} {search_words(tags)}".strip(), row_id))
+            if updates:
+                conn.exec_driver_sql("UPDATE karaoke_library SET tags = ?, search_blob = ? WHERE id = ?", updates)
+        logging.info("Labelled karaoke library: %s of %s songs are duets or kids songs", len(updates), count)
 
     def _dedupe_karaoke_library(self) -> None:
         """One-time migration for databases created before the unique primary_file index."""

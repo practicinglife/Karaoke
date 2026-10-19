@@ -987,6 +987,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                         "artist": row.artist,
                         "display_name": row.display_name,
                         "extension": row.extension,
+                        "tags": row.tags or "",
                     }
                     for row in results
                 ]
