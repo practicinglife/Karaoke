@@ -1,5 +1,20 @@
 # Changelog
 
+## v1.1.8 — 2026-10-19
+
+### Changed
+- **Song search groups results** (traditional karaoke). While typing, matching **artists**
+  show with how many songs they have, and matching **song titles** below. Tap an artist to
+  see their songs A–Z; tap a song to see its versions: Karaoke (vocals removed) and Sing
+  Along (with vocals) videos, other videos, and CD+G discs by brand. Every song and version
+  has a one-tap **ADD**; a song's ADD picks the best version (a vocals-removed video first,
+  Sing Along never by default). Duets show under each singer and as the pair. Type an
+  artist and a title together ("dolly jolene") to go straight to the song; "duets" and
+  "kids" still work. Search now counts the whole library instead of stopping at 120 files.
+- Songs added from disc-code files ("CBD-105262 - Dolly Parton - …") are saved with the
+  real artist and title. Disc codes, track numbers, "Last, First" names and tags like (MPX)
+  are tidied for search only; your files are never renamed.
+
 ## v1.1.7 — 2026-10-19
 
 ### Added
