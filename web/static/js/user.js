@@ -8,10 +8,6 @@ const traditionalRow = document.getElementById("traditional-row");
 const searchInput = document.getElementById("traditional-search");
 const resultsEl = document.getElementById("search-results");
 const karaokeLibraryId = document.getElementById("karaoke-library-id");
-const paginationEl = document.getElementById("search-pagination");
-const prevBtn = document.getElementById("search-prev");
-const nextBtn = document.getElementById("search-next");
-const pageLabel = document.getElementById("search-page-label");
 const deleteModeToggle = document.getElementById("delete-mode-toggle");
 const songTilesEl = document.getElementById("song-tiles");
 const deleteSelectedBtn = document.getElementById("delete-selected-btn");
@@ -20,10 +16,6 @@ const userCsrfToken = document.getElementById("user-csrf-token");
 const bulkUploadToggle = document.getElementById("bulk-upload-toggle");
 const bulkUploadPanel = document.getElementById("bulk-upload-panel");
 
-const PAGE_SIZE = 60;
-const SEARCH_LIMIT = 120;
-let currentResults = [];
-let currentPage = 1;
 let searchController = null;
 let lastSearchQuery = "";
 let userQueueNotificationTimer = null;
@@ -32,7 +24,6 @@ let lastUserQueueNotificationKey = "none||";
 const QUEUED_SONG_ARIA_SUFFIX = ", queued tonight, click again to remove from queue";
 const UP_NEXT_NOTIFICATION_TEXT = "UP NEXT!!";
 const UP_NOW_NOTIFICATION_TEXT = "UP NOW!!";
-const VIDEO_EXTENSIONS = new Set([".mp4", ".mkv", ".avi", ".wmv"]);
 
 function getQueuedSongBaseLabel(tile) {
   const existing = tile.dataset.baseAriaLabel;
@@ -98,80 +89,176 @@ function debounce(fn, wait) {
 
 
 function clearSearchResults() {
-  currentResults = [];
-  currentPage = 1;
   resultsEl.innerHTML = "";
-  if (paginationEl) {
-    paginationEl.style.display = "none";
-  }
-  if (pageLabel) {
-    pageLabel.textContent = "";
+}
+
+function searchNote(text) {
+  const li = document.createElement("li");
+  li.className = "search-note";
+  li.textContent = text;
+  return li;
+}
+
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+// Save one version of a song to the singer's list in one tap.
+function addVersion(song, version) {
+  karaokeLibraryId.value = String(version.id || "");
+  if (titleInput) titleInput.value = version.save_title || song.title || "";
+  if (artistInput) artistInput.value = song.artist || "";
+  const form = document.getElementById("add-song-form");
+  if (form && typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+  } else if (form) {
+    form.submit();
   }
 }
 
-function formatTraditionalResultLabel(row) {
-  const extension = String(row?.extension || "").toLowerCase();
-  const suffix = VIDEO_EXTENSIONS.has(extension) ? " [VIDEO]" : "";
-  const tags = String(row?.tags || "").split(",").filter(Boolean);
-  const labels = tags.map((tag) => ` [${tag.toUpperCase()}]`).join("");
-  return `${row.display_name}${suffix}${labels}`;
+function addButton(song, version, label) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "search-add";
+  btn.textContent = label;
+  btn.setAttribute("aria-label", `Add ${song.title} by ${song.artist}${version.label ? `, ${version.label}` : ""}`);
+  btn.onclick = (event) => {
+    event.stopPropagation();
+    btn.disabled = true;
+    btn.textContent = "ADDING…";
+    addVersion(song, version);
+  };
+  return btn;
 }
 
-function renderCurrentSearchPage() {
-  const totalMatches = currentResults.length;
-  const totalPages = Math.max(1, Math.ceil(totalMatches / PAGE_SIZE));
+function tagBadges(tags) {
+  return (tags || []).map((tag) => {
+    const span = document.createElement("span");
+    span.className = "search-tag";
+    span.textContent = tag.toUpperCase();
+    return span;
+  });
+}
 
-  if (currentPage < 1) currentPage = 1;
-  if (currentPage > totalPages) currentPage = totalPages;
+function toggleRow(row, nested, open) {
+  nested.hidden = !open;
+  row.setAttribute("aria-expanded", open ? "true" : "false");
+  row.querySelector(".search-chevron").textContent = open ? "▾" : "▸";
+}
 
+function renderSong(song, showArtist) {
+  const li = document.createElement("li");
+  li.className = "search-song";
+  const row = document.createElement("div");
+  row.className = "search-row";
+
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "search-toggle";
+  toggle.setAttribute("aria-expanded", "false");
+  const chevron = document.createElement("span");
+  chevron.className = "search-chevron";
+  chevron.textContent = "▸";
+  const name = document.createElement("span");
+  name.className = "search-name";
+  name.textContent = showArtist ? `${song.title} — ${song.artist}` : song.title;
+  const count = document.createElement("span");
+  count.className = "search-count";
+  count.textContent = plural(song.versions.length, "version");
+  toggle.append(chevron, name, ...tagBadges(song.tags), count);
+
+  const best = song.versions.find((v) => v.id === song.best_id) || song.versions[0];
+  row.append(toggle, addButton(song, best, "ADD"));
+
+  const nested = document.createElement("ul");
+  nested.className = "search-versions";
+  nested.hidden = true;
+  for (const version of song.versions) {
+    const vli = document.createElement("li");
+    vli.className = "search-row search-version";
+    const label = document.createElement("span");
+    label.className = "search-name";
+    label.textContent = version.id === song.best_id ? `${version.label} (best)` : version.label;
+    vli.append(label, addButton(song, version, "ADD"));
+    nested.appendChild(vli);
+  }
+  toggle.onclick = () => toggleRow(toggle, nested, nested.hidden);
+
+  li.append(row, nested);
+  return li;
+}
+
+function renderArtist(artist, query) {
+  const li = document.createElement("li");
+  li.className = "search-artist";
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "search-toggle search-row";
+  toggle.setAttribute("aria-expanded", "false");
+  const chevron = document.createElement("span");
+  chevron.className = "search-chevron";
+  chevron.textContent = "▸";
+  const name = document.createElement("span");
+  name.className = "search-name";
+  name.textContent = artist.name;
+  const count = document.createElement("span");
+  count.className = "search-count";
+  count.textContent = plural(artist.songs, "song");
+  toggle.append(chevron, name, count);
+
+  const nested = document.createElement("ul");
+  nested.className = "search-songs";
+  nested.hidden = true;
+  let loaded = false;
+  toggle.onclick = async () => {
+    const open = nested.hidden;
+    toggleRow(toggle, nested, open);
+    if (!open || loaded) return;
+    loaded = true;
+    nested.appendChild(searchNote("Loading songs…"));
+    try {
+      const res = await fetch(
+        `/song/search/artist?key=${encodeURIComponent(artist.key)}&q=${encodeURIComponent(query)}`,
+        { cache: "no-cache" }
+      );
+      const songs = res.ok ? await res.json() : [];
+      nested.innerHTML = "";
+      for (const song of songs) {
+        // Duets and featured spots show the full credit.
+        nested.appendChild(renderSong(song, song.artist.toLowerCase() !== artist.name.toLowerCase()));
+      }
+      if (!songs.length) nested.appendChild(searchNote("No songs found."));
+    } catch (_error) {
+      loaded = false;
+      nested.innerHTML = "";
+      nested.appendChild(searchNote("Couldn't load the songs. Tap again."));
+    }
+  };
+  li.append(toggle, nested);
+  return li;
+}
+
+function renderGroupedResults(data, query) {
   resultsEl.innerHTML = "";
-
-  if (!totalMatches) {
-    const li = document.createElement("li");
-    li.textContent = "No matching song was found in the indexed karaoke library.";
-    resultsEl.appendChild(li);
-    if (paginationEl) paginationEl.style.display = "none";
+  const artists = Array.isArray(data?.artists) ? data.artists : [];
+  const songs = Array.isArray(data?.songs) ? data.songs : [];
+  if (!artists.length && !songs.length) {
+    resultsEl.appendChild(searchNote("No matching song was found in the indexed karaoke library."));
     return;
   }
-
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const end = Math.min(start + PAGE_SIZE, totalMatches);
-  const pageRows = currentResults.slice(start, end);
-
-  const info = document.createElement("li");
-  info.textContent = `Showing ${start + 1}-${end} of ${totalMatches} tracks`;
-  resultsEl.appendChild(info);
-
-  for (const row of pageRows) {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = `SELECT: ${formatTraditionalResultLabel(row)}`;
-    btn.onclick = () => {
-      karaokeLibraryId.value = String(row.id || "");
-      btn.textContent = `SELECTED: ${formatTraditionalResultLabel(row)}`;
-      if (titleInput) {
-        titleInput.value = row.title || "";
-      }
-      if (artistInput) {
-        artistInput.value = row.artist || "";
-      }
-    };
-    li.appendChild(btn);
-    resultsEl.appendChild(li);
+  if (artists.length) {
+    const head = searchNote("ARTISTS");
+    head.className = "search-heading";
+    resultsEl.appendChild(head);
+    for (const artist of artists) resultsEl.appendChild(renderArtist(artist, query));
+    if (data.more_artists) resultsEl.appendChild(searchNote(`${data.more_artists} more artists — keep typing to narrow it down`));
   }
-
-  if (paginationEl) {
-    paginationEl.style.display = totalPages > 1 ? "block" : "none";
-  }
-  if (pageLabel) {
-    pageLabel.textContent = `Page ${currentPage} of ${totalPages}`;
-  }
-  if (prevBtn) {
-    prevBtn.disabled = currentPage <= 1;
-  }
-  if (nextBtn) {
-    nextBtn.disabled = currentPage >= totalPages;
+  if (songs.length) {
+    const head = searchNote("SONGS");
+    head.className = "search-heading";
+    resultsEl.appendChild(head);
+    for (const song of songs) resultsEl.appendChild(renderSong(song, true));
+    if (data.more_songs) resultsEl.appendChild(searchNote(`${data.more_songs} more songs — keep typing to narrow it down`));
   }
 }
 
@@ -202,30 +289,22 @@ async function runSearch() {
   searchController = new AbortController();
 
   try {
-    const response = await fetch(
-      `/song/search?service=traditional&q=${encodeURIComponent(q)}&limit=${SEARCH_LIMIT}`,
-      { cache: "no-cache", signal: searchController.signal }
-    );
+    const response = await fetch(`/song/search/grouped?q=${encodeURIComponent(q)}`, {
+      cache: "no-cache",
+      signal: searchController.signal,
+    });
     if (!response.ok) {
       clearSearchResults();
-      const li = document.createElement("li");
-      li.textContent = "Search unavailable. Try again.";
-      resultsEl.appendChild(li);
+      resultsEl.appendChild(searchNote("Search unavailable. Try again."));
       return;
     }
-
-    const items = await response.json();
-    currentResults = Array.isArray(items) ? items : [];
-    currentPage = 1;
-    renderCurrentSearchPage();
+    renderGroupedResults(await response.json(), q);
   } catch (_error) {
     if (_error && _error.name === "AbortError") {
       return;
     }
     clearSearchResults();
-    const li = document.createElement("li");
-    li.textContent = "Search unavailable. Try again.";
-    resultsEl.appendChild(li);
+    resultsEl.appendChild(searchNote("Search unavailable. Try again."));
   }
 }
 
@@ -271,23 +350,6 @@ serviceSelector.addEventListener("change", () => {
 searchInput.addEventListener("input", debouncedSearch);
 urlInput.addEventListener("input", debouncedMetadata);
 urlInput.addEventListener("blur", resolveLinkMetadata);
-if (prevBtn) {
-  prevBtn.addEventListener("click", () => {
-    if (currentPage > 1) {
-      currentPage -= 1;
-      renderCurrentSearchPage();
-    }
-  });
-}
-if (nextBtn) {
-  nextBtn.addEventListener("click", () => {
-    const totalPages = Math.max(1, Math.ceil(currentResults.length / PAGE_SIZE));
-    if (currentPage < totalPages) {
-      currentPage += 1;
-      renderCurrentSearchPage();
-    }
-  });
-}
 
 function updateDeleteSelectedState() {
   if (!songTilesEl || !deleteSelectedBtn) return;

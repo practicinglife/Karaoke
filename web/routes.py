@@ -8,6 +8,7 @@ import json
 import mimetypes
 import os
 import re
+import threading
 from pathlib import Path
 from html import unescape
 from typing import Any
@@ -40,6 +41,7 @@ from karaoke.library_indexer import (
     search_library_traditional,
 )
 from karaoke.models import KaraokeLibrary, QueueItem, SessionRecord, Song, User
+from karaoke.song_groups import GroupedLibrary
 from karaoke.queue_manager import COMPLETED, NOW_PLAYING, QueueManager, SKIPPED, WAITING
 from karaoke.services import (
     active_session,
@@ -90,6 +92,19 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             emit=lambda event, payload: socketio.emit(event, payload),
             emit_queue=lambda: emit_queue_update(),
         )
+
+    grouped_library = GroupedLibrary()
+
+    def _warm_grouped_library() -> None:
+        # Reading 80,000+ songs takes a few seconds; do it before the first singer searches.
+        try:
+            with runtime_state.db.session_scope() as db:
+                grouped_library.entries(db)
+        except Exception:
+            logger.exception("Could not prepare the grouped song search")
+
+    if "PYTEST_CURRENT_TEST" not in os.environ:  # tests use throwaway databases
+        threading.Thread(target=_warm_grouped_library, name="grouped-search-warmup", daemon=True).start()
 
     def ensure_csrf() -> str:
         token = flask_session.get("csrf_token")
@@ -992,6 +1007,24 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
                     for row in results
                 ]
             )
+
+    @bp.get("/song/search/grouped")
+    def song_search_grouped() -> Response:
+        """Traditional karaoke search grouped by artist and song (see karaoke/song_groups.py)."""
+        _ = require_guest_session()
+        with runtime_state.db.session_scope() as db:
+            _ensure_traditional_library_index(db)
+            return jsonify(grouped_library.search(db, request.args.get("q", "")))
+
+    @bp.get("/song/search/artist")
+    def song_search_artist() -> Response:
+        """Every song of one artist from the grouped search, with its versions."""
+        _ = require_guest_session()
+        key = request.args.get("key", "").strip()[:255]
+        if not key:
+            return jsonify([])
+        with runtime_state.db.session_scope() as db:
+            return jsonify(grouped_library.artist_songs(db, key, request.args.get("q", "")))
 
     @bp.get("/song/link-metadata")
     def song_link_metadata() -> Response:

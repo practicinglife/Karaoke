@@ -64,14 +64,9 @@
         </div>
         <div id="traditional-row">
           <label>Search indexed karaoke library</label>
-          <input id="traditional-search" placeholder="Type to search title/artist">
+          <input id="traditional-search" placeholder="Type an artist or song title" autocomplete="off">
           <input type="hidden" name="karaoke_library_id" id="karaoke-library-id">
-          <ul id="search-results"></ul>
-          <div id="search-pagination" style="display:none; margin-top:8px;">
-            <button type="button" id="search-prev">PREV</button>
-            <span id="search-page-label" style="margin:0 10px;"></span>
-            <button type="button" id="search-next">NEXT</button>
-          </div>
+          <ul id="search-results" class="search-results"></ul>
         </div>
         <button type="submit">SAVE SONG</button>
       </form>

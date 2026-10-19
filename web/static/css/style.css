@@ -376,3 +376,97 @@ a {
   vertical-align: middle;
   border-radius: 22%;
 }
+
+/* Grouped song search: artists > songs > versions */
+.search-results {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+
+.search-results ul {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+}
+
+.search-heading {
+  margin: 0.9rem 0 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #9a9a9a;
+}
+
+.search-note {
+  padding: 0.4rem 0;
+  color: #9a9a9a;
+  font-size: 0.9rem;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.search-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.7rem 0.4rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  width: 100%;
+}
+
+.search-toggle:hover,
+.search-toggle:focus-visible {
+  background: #222;
+}
+
+.search-chevron {
+  flex: none;
+  width: 1rem;
+  color: #9a9a9a;
+}
+
+.search-name {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.search-version .search-name {
+  padding: 0.6rem 0.4rem 0.6rem 1.5rem;
+  font-size: 0.85rem;
+  color: #d0d0d0;
+}
+
+.search-count {
+  flex: none;
+  font-size: 0.85rem;
+  color: #9a9a9a;
+}
+
+.search-tag {
+  flex: none;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: #2d3a4f;
+  color: #cfe0ff;
+}
+
+.search-add {
+  flex: none;
+  margin: 0.3rem 0;
+  padding: 0.45rem 0.8rem;
+  font-weight: 700;
+}
