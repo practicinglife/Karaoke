@@ -9,13 +9,17 @@ from __future__ import annotations
 
 import re
 
-DUET, KIDS = "duet", "kids"
+DUET, KIDS, KT = "duet", "kids", "kt"
 
 # Words that search for a label (singular, plural and the like).
 SEARCH_WORDS = {
     DUET: {"duet", "duets"},
     KIDS: {"kid", "kids", "children", "childrens", "child", "kidz"},
+    KT: {"kt"},
 }
+
+# ---- KT: videos labelled [KT Karaoke] / [KT Sing Along] ("Artist - Title [KT Karaoke].mp4") ---
+KT_MARK = re.compile(r"\[KT (?:Karaoke|Sing Along)\]", re.I)
 
 # ---- duets ------------------------------------------------------------------------------
 # Karaoke makers mark duet tracks: "(Duet)", "[Duet]", "(Mf Duet)", "Duet With".
@@ -86,6 +90,8 @@ def tags_for(artist: str, title: str, display_name: str, file_name: str = "") ->
     brand_tags = " ".join(re.findall(r"\[([^\]]*)\]", everything))
     if KIDS_BRANDS.search(brand_tags) or KIDS_ARTISTS.search(plain_artist) or KIDS_SONGS.search(plain_song):
         tags.append(KIDS)
+    if KT_MARK.search(everything):
+        tags.append(KT)
     return tags
 
 

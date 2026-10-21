@@ -2,7 +2,7 @@
 
 Typing "dolly" lists the matching artists (Dolly Parton: 84 songs) and the matching song
 titles ("Hello, Dolly!"). An artist opens to their songs; a song opens to its versions
-(Karaoke and Sing Along videos made by karaoke-maker, other videos, CD+G discs by brand).
+(Karaoke and Sing Along videos labelled [KT Karaoke] / [KT Sing Along], other videos, CD+G discs by brand).
 Each song also has a best version for one-tap adding.
 
 The library index is read once into memory and re-read when the library changes, so each
@@ -22,11 +22,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .models import KaraokeLibrary
-from .song_tags import DUET, NOT_A_DUET, SEARCH_WORDS, TWO_SINGERS, split_display, split_query
+from .song_tags import DUET, KT, KT_MARK, NOT_A_DUET, SEARCH_WORDS, TWO_SINGERS, split_display, split_query
 from .utils import normalize_text
 
 MAX_ARTISTS = 40
 MAX_SONGS = 60
+MAX_LABEL_SONGS = 500  # "kt" or "duets" on its own lists them all, A-Z
 MIN_QUERY = 2
 
 VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".wmv", ".m4v"}
@@ -162,6 +163,8 @@ def entry_from_row(row_id: int, artist_field: str, title_field: str, display_nam
     # Duet labels are stored at library refresh; work it out here too so grouping doesn't wait.
     if DUET not in tag_list and TWO_SINGERS.search(artist) and not NOT_A_DUET.search(artist):
         tag_list.append(DUET)
+    if KT not in tag_list and KT_MARK.search(f"{title_field} {display_name}"):
+        tag_list.append(KT)  # a [KT ...] video (also stored on the next library refresh)
     singers = [(name, _key(name)) for name in singers_of(artist, DUET in tag_list)]
     label, rank = version_of(artist_field, title_field or display_name, extension)
     words = " ".join(word for tag in tag_list for word in SEARCH_WORDS.get(tag, ()))
@@ -199,11 +202,19 @@ class GroupedLibrary:
             return self._entries
 
     def search(self, session: Session, query: str) -> dict:
-        """Artists and songs matching what's typed so far."""
+        """Artists and songs matching what's typed so far. A label word ("kt", "duets") lists
+        that label's songs; if that finds nothing ("kt tunstall"), the words are searched as
+        plain text instead (KT Tunstall)."""
         normalized = normalize_text(query or "")
-        wanted_tags, rest = split_query(normalized)
         if len(normalized) < MIN_QUERY:
             return {"artists": [], "songs": [], "more_artists": 0, "more_songs": 0}
+        wanted_tags, rest = split_query(normalized)
+        found = self._search(session, wanted_tags, rest)
+        if wanted_tags and rest and not found["artists"] and not found["songs"]:
+            found = self._search(session, set(), normalized)
+        return found
+
+    def _search(self, session: Session, wanted_tags: set[str], rest: str) -> dict:
         tokens = rest.split()
         pool = [e for e in self.entries(session) if all(tag in e.tags for tag in wanted_tags)]
         matched = [e for e in pool if all(token in e.blob for token in tokens)]
@@ -239,8 +250,9 @@ class GroupedLibrary:
         song_keys = {e.song_key for e in matched if title_hit(e)}
         songs = group_songs([e for key in song_keys for e in self._songs.get(key, [])])
         songs.sort(key=lambda s: (not s["title_key"].startswith(rest), s["title"].lower(), s["artist"].lower()))
-        return {"artists": artist_out, "songs": songs[:MAX_SONGS],
-                "more_artists": max(0, len(artist_list) - MAX_ARTISTS), "more_songs": max(0, len(songs) - MAX_SONGS)}
+        limit = MAX_LABEL_SONGS if wanted_tags and not rest else MAX_SONGS
+        return {"artists": artist_out, "songs": songs[:limit],
+                "more_artists": max(0, len(artist_list) - MAX_ARTISTS), "more_songs": max(0, len(songs) - limit)}
 
     def artist_songs(self, session: Session, artist_key: str, query: str = "") -> list[dict]:
         """Every song of one artist (including duets and featured spots), A-Z, with versions."""

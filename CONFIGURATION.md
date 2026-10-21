@@ -20,7 +20,7 @@ Configured from Settings page or persisted in `settings` table.
 ## Playback Modes
 - **built_in**: uses in-app player routes/surfaces.
 - **system_default**: opens selected media/url via OS associations.
-- **external_application**: launches configured external executable path.
+- **external_application**: launches configured external executable path. Rarely needed (the built-in player plays MP3+CDG and video on the stage screen). Tested with Kanto, which loads MP3+CDG directly; other players are untested.
 
 ## Library Indexing
 - Configure karaoke folder.
