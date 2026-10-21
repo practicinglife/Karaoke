@@ -98,3 +98,11 @@ def test_band_names_only_count_as_the_first_part_of_the_credit() -> None:
         assert NOT_A_DUET.search(band), band
     for duet in ("Garth Brooks & Trisha Yearwood", "Diana Ross & Lionel Richie", "Tom Petty & Stevie Nicks"):
         assert not NOT_A_DUET.search(duet), duet
+
+
+def test_karaoke_maker_videos_get_the_kt_label() -> None:
+    from karaoke.song_tags import tags_for
+
+    assert "kt" in tags_for("Eagles", "Hotel California [KT Karaoke]", "Eagles - Hotel California [KT Karaoke]")
+    assert "kt" in tags_for("Eagles", "Hotel California [KT Sing Along]", "Eagles - Hotel California [KT Sing Along]")
+    assert "kt" not in tags_for("KT Tunstall", "Suddenly I See [SF Karaoke]", "KT Tunstall - Suddenly I See [SF Karaoke]")

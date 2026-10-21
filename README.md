@@ -39,27 +39,37 @@ Want zero touches at all? In Settings, set *When the countdown runs out* to **St
 
 ## Screenshots
 
-### Admin
-![Admin Page](docs/screenshots/01-admin-page.png)
+*(Demo singers and songs.)*
 
-### Ticker / Live Queue
-![Ticker Live Queue](docs/screenshots/02-ticker-live-queue.png)
+### Stage screen: between singers
+Who's up next and their song, the countdown, the singers after them, and the break song that's playing.
 
-### User Bulk Upload
-![User Bulk Upload](docs/screenshots/03-user-bulk-upload.png)
+![Stage screen with the next singer, countdown and now-playing break song](docs/screenshots/02-stage-up-next.png)
 
-### Up Next / Singing Now
-![Up Next Singing Now 1](docs/screenshots/04-up-next-now-singing.png)
-![Up Next Singing Now 2](docs/screenshots/05-up-next-now-singing.png)
+### Admin dashboard
+Now playing, recently played, the stage screen controls, the mic-stand QR code, teach mode and the queue.
 
-### Add to Queue
-![Add to Queue](docs/screenshots/06-AddtoQueue.png)
+![Admin dashboard](docs/screenshots/01-admin-dashboard.png)
 
-### House Session Join
-![House Session Join](docs/screenshots/07-house-session-join.png)
+### Live queue ticker
+![Live queue ticker](docs/screenshots/03-ticker-live-queue.png)
 
-### Player Fullscreen
-![Player Fullscreen](docs/screenshots/08-player-fullscreen.png)
+### Guests' phones
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/04-join.png" width="250" alt="Join with the house code"><br>Join with the house code</td>
+    <td align="center"><img src="docs/screenshots/05-singer-search-grouped.png" width="250" alt="Search grouped by artist, song and version"><br>Search: artist → songs → versions</td>
+    <td align="center"><img src="docs/screenshots/06-singer-search-kt.png" width="250" alt="Search kt for your KT videos"><br><b>kt</b>: your [KT Karaoke] / [KT Sing Along] videos</td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/07-singer-saved-songs.png" width="250" alt="Saved songs list with find, sort and queued first"><br>Saved songs: find, sort, queued first</td>
+    <td align="center"><img src="docs/screenshots/08-singer-played-tonight.png" width="250" alt="Songs sung tonight marked at the bottom"><br>Sung tonight drops to the bottom</td>
+    <td></td>
+  </tr>
+</table>
+
+### Player fullscreen
+![Player fullscreen](docs/screenshots/09-player-fullscreen.png)
 
 ## Guest Experience
 
@@ -69,6 +79,8 @@ Guests use their own phones on the same Wi-Fi. There's nothing to install.
 2. Pick a new name, or choose their saved name from an earlier night.
 3. On their page they can:
    - save songs to their own list: search the karaoke library, or paste YouTube, YouTube Music, Spotify or Apple Music links (or bulk-paste many at once)
+   - search by typing an artist or a title: results are grouped by **artist → songs → versions** (Karaoke and Sing Along videos, other videos, CD+G discs by brand), with one-tap **ADD**. Spellings of the same song are merged, and duets show under each singer. Type **duets**, **kids** or **kt** (videos named [KT Karaoke] / [KT Sing Along]) to list those, or add a name to narrow it ("kt eagles")
+   - find their own saved songs fast: a compact list with **Find in my songs**, sorting, songs queued tonight first and songs **already sung tonight** at the bottom
    - tap a saved song to queue it, and tap it again to take it back out
    - get flashing **UP NEXT!!** and **UP NOW!!** alerts (with vibration) when their turn comes
    - press **START MY SONG** when they're at the mic
@@ -132,7 +144,7 @@ With **Singer Rotation** on (the default), the queue runs in rounds: each singer
 - **YouTube** and **YouTube Music**: any video or song link. YouTube Premium avoids ads.
 - **Spotify**: song links (Spotify Premium).
 - **Apple Music**: song or album-track links (Apple Music subscription). The app plays exactly that track.
-- **Traditional karaoke**: your MP3+CDG and video files (`.mp4 .mkv .avi .wmv`), indexed and searchable from guests' phones. They play in the built-in player, or optionally in Kanto or your default player.
+- **Traditional karaoke**: your MP3+CDG and video files (`.mp4 .mkv .avi .wmv`), indexed and searchable from guests' phones. They play in the built-in player on the stage screen, which is all most nights need. Optionally they can open in an external player instead: Kanto (which loads MP3+CDG directly) is the one that's been tested; other players haven't been.
 
 The stage window signs in to your streaming services once and remembers it.
 

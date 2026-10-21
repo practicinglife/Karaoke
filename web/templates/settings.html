@@ -26,9 +26,10 @@
       <label>Karaoke Folder</label>
       <input name="karaoke_folder" value="{{ values['karaoke_folder'] }}">
       <label>Playback Mode</label>
-      <label><input type="radio" name="playback_mode" value="built_in" {% if values['playback_mode'] == 'built_in' %}checked{% endif %}> Built-In Player</label>
+      <label><input type="radio" name="playback_mode" value="built_in" {% if values['playback_mode'] == 'built_in' %}checked{% endif %}> Built-In Player (recommended: plays MP3+CDG and video on the stage screen)</label>
       <label><input type="radio" name="playback_mode" value="system_default" {% if values['playback_mode'] == 'system_default' %}checked{% endif %}> System Default</label>
       <label><input type="radio" name="playback_mode" value="external_application" {% if values['playback_mode'] == 'external_application' %}checked{% endif %}> External Application</label>
+      <p class="hint">Not needed for most nights: the built-in player handles traditional karaoke. If you prefer another player, Kanto loads MP3+CDG files directly and is the one that's been tested; other players haven't been.</p>
       <label>External Application Path (optional)</label>
       <input name="external_application_path" value="{{ values['external_application_path'] }}" placeholder="C:\\Path\\Player.exe or /usr/bin/mpv">
       <label>Traditional Karaoke Server URL</label>

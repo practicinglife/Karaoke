@@ -138,3 +138,24 @@ def test_a_pair_is_one_group_however_it_is_credited_and_names_one_letter_off_mer
     assert len({e.pair_key for e in entries[:3]}) == 1
     assert entries[0].pair_key == "garth brooks+trisha yearwood"
     assert {key for e in entries[3:] for _, key in e.singers} == {"kenny rogers"}
+
+
+def test_kt_lists_the_karaoke_maker_songs_and_kt_tunstall_still_works(app) -> None:
+    rows = [
+        ("Eagles", "Hotel California [KT Karaoke]", ".mp4", ""),
+        ("Eagles", "Hotel California [KT Sing Along]", ".mp4", ""),
+        ("Eagles", "Take It Easy [SC Karaoke]", ".mp3+.cdg", ""),
+        ("Tracy Chapman", "Give Me One Reason [KT Karaoke]", ".mp4", ""),
+        ("KT Tunstall", "Black Horse And The Cherry Tree [SF Karaoke]", ".mp3+.cdg", ""),
+    ]
+    library = GroupedLibrary()
+    with app.runtime_state.db.session_scope() as db:
+        _add(db, rows)
+    with app.runtime_state.db.session_scope() as db:
+        made = library.search(db, "kt")
+        assert [s["title"] for s in made["songs"]] == ["Give Me One Reason", "Hotel California"]
+        assert all("kt" in s["tags"] for s in made["songs"])
+        eagles = library.search(db, "kt eagles")
+        assert [a["name"] for a in eagles["artists"]] == ["Eagles"]
+        assert [s["title"] for s in library.artist_songs(db, "eagles", "kt eagles")] == ["Hotel California"]
+        assert [a["name"] for a in library.search(db, "kt tunstall")["artists"]] == ["KT Tunstall"]

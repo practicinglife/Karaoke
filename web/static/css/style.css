@@ -27,6 +27,7 @@ label {
 input,
 select,
 button {
+  box-sizing: border-box; /* full width includes the padding, so boxes don't run off phones */
   width: 100%;
   padding: 0.6rem;
   margin-top: 0.25rem;
@@ -611,4 +612,10 @@ a {
 
 .saved-more[hidden] {
   display: none;
+}
+
+.hint {
+  margin: 0.25rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: #9a9a9a;
 }
