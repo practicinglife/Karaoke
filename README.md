@@ -50,6 +50,14 @@ Who's up next and their song, the countdown, the singers after them, and the bre
 
 ![Mic stand: the next singer and one big green START button](docs/screenshots/10-mic-stand-start.png)
 
+**You choose how each song starts** (Settings → Stage Screen):
+
+- **Time between singers:** *Countdown (seconds)* sets how long the next singer gets to step up (60 seconds unless you change it).
+- **When the countdown runs out:**
+  - *Keep waiting for the singer* (default): the song starts only when they press **START** (or START MY SONG on their phone).
+  - *Start their song anyway*: the song plays by itself when the countdown ends, for a fully hands-free night.
+  - *Move them down one and call the next singer*: a no-show doesn't hold up the room.
+
 ### Admin dashboard
 Now playing, recently played, the stage screen controls, the mic-stand QR code, teach mode and the queue.
 
@@ -119,7 +127,7 @@ Any of these starts the song of whoever is up next:
 
 ### When the countdown runs out
 
-You choose in Settings: keep waiting (default), start their song anyway, or move them down one and call the next singer.
+You choose in Settings → Stage Screen: how long the countdown is (*Countdown (seconds)*, 60 by default), and what happens when it runs out: keep waiting for the singer to press START (default), start their song anyway, or move them down one and call the next singer.
 
 ### Teach mode
 
