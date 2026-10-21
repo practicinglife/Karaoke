@@ -46,6 +46,11 @@ Who's up next and their song, the countdown, the singers after them, and the bre
 
 ![Stage screen with the next singer, countdown and now-playing break song](docs/screenshots/02-stage-up-next.png)
 
+### Mic stand: one big START button
+An iPad or phone at the mic shows who's up, their song and the countdown. The singer taps **START** when they're ready (or uses their own phone, a foot pedal or a network button).
+
+<img src="docs/screenshots/10-mic-stand-start.png" width="600" alt="Mic stand page with the next singer and a big START button">
+
 ### Admin dashboard
 Now playing, recently played, the stage screen controls, the mic-stand QR code, teach mode and the queue.
 
@@ -64,7 +69,7 @@ Now playing, recently played, the stage screen controls, the mic-stand QR code, 
   <tr>
     <td align="center"><img src="docs/screenshots/07-singer-saved-songs.png" width="250" alt="Saved songs list with find, sort and queued first"><br>Saved songs: find, sort, queued first</td>
     <td align="center"><img src="docs/screenshots/08-singer-played-tonight.png" width="250" alt="Songs sung tonight marked at the bottom"><br>Sung tonight drops to the bottom</td>
-    <td></td>
+    <td align="center"><img src="docs/screenshots/11-singer-up-next.png" width="250" alt="UP NEXT alert with START MY SONG on the singer's phone"><br>Their turn: <b>UP NEXT!!</b> and <b>START MY SONG</b></td>
   </tr>
 </table>
 
