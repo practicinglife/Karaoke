@@ -1,5 +1,23 @@
 # Changelog
 
+## v1.1.11 — 2026-10-21
+
+### Added
+- **Search "kt"** to list every video named "[KT Karaoke]" or "[KT Sing Along]", A–Z with both
+  versions; add a name to narrow it ("kt eagles"). They show a **[KT]** badge in every search.
+  A search that finds nothing as a label ("kt tunstall") searches the words as plain text, so
+  KT Tunstall still turns up.
+
+### Changed
+- README: new screenshots of the stage screen between singers, the admin dashboard, the live
+  queue ticker and guests' phones (grouped search, saved songs, played tonight).
+- Settings: the External Application player is noted as rarely needed (the built-in player
+  plays MP3+CDG and video on the stage). Kanto, which loads MP3+CDG directly, is the only one
+  that's been tested.
+
+### Fixed
+- Text boxes no longer run past the right edge of phone screens.
+
 ## v1.1.10 — 2026-10-19
 
 ### Fixed
