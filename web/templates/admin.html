@@ -64,6 +64,11 @@
       <img class="mic-qr" src="{{ url_for('web.mic_qr', token=token) }}" alt="QR code for the mic stand page" width="220" height="220">
       <p><a href="{{ mic_url }}" target="_blank" rel="noopener">Open the mic stand page</a></p>
 
+      <h3>DJ phone (host only)</h3>
+      <p>Scan with your own phone to run the night from anywhere in the room: queue a song for any singer (or someone new), move or remove songs, and start, end or restart the stage. This code opens the host controls, so don't put it where guests can scan it.</p>
+      <img class="mic-qr" src="{{ url_for('web.dj_qr', token=token) }}" alt="QR code for the DJ phone page" width="220" height="220">
+      <p><a href="{{ dj_url }}" target="_blank" rel="noopener">Open the DJ phone page</a></p>
+
       <h3>Teach a service</h3>
       <p>Open a song, then do exactly what you would do by hand (play, lyrics, maximize, full screen). The app records your clicks and repeats them for every song from that service.</p>
       {% if taught_services %}

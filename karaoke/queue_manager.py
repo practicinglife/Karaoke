@@ -285,6 +285,17 @@ class QueueManager:
         )
         self.db_session.flush()
 
+    def move_to_top(self, queue_item_id: int, singer_rotation_on: bool = False) -> None:
+        """Make this song the next one (with rotation on: its singer goes next)."""
+        item = self.db_session.get(QueueItem, queue_item_id)
+        if not item or item.status != WAITING:
+            raise ValueError("Waiting queue item not found.")
+        for _ in range(len(self.waiting_items(item.session_id))):
+            ordered = self.ordered_up_next(item.session_id, singer_rotation_on)
+            if not ordered or ordered[0].id == item.id:
+                return
+            self.move_item(item.id, "up", singer_rotation_on)
+
     def clear_queue(self, session_id: int) -> int:
         """Remove all waiting/now-playing items from active queue."""
         items = list(

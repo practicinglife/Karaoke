@@ -1188,6 +1188,7 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
             return render_template(
                 "admin.html",
                 mic_url=mic_url,
+                dj_url=_dj_url(record.admin_token),
                 taught_services=taught_services(),
                 monitors=describe_monitors(),
                 stage_monitor=stage_monitor,
@@ -1770,5 +1771,177 @@ def register_routes(app, runtime_state, socketio: SocketIO) -> None:
         with runtime_state.db.session_scope() as db:
             users = list_users(db)
         return jsonify([{"name": user.display_name} for user in users])
+
+    # ----- DJ phone page: the host runs the queue and the stage from a phone ------------
+
+    def _dj_url(token: str) -> str:
+        return f"{request.host_url.rstrip('/')}{url_for('web.dj_page', token=token)}"
+
+    @bp.get("/dj")
+    def dj_page() -> str:
+        record = require_admin()
+        with runtime_state.db.session_scope() as db:
+            house_name = get_setting(db, "house_name") or "Karaoke Ticker"
+        return render_template("dj.html", token=record.admin_token, house_code=record.house_code,
+                               house_name=house_name, csrf_token=ensure_csrf())
+
+    @bp.get("/admin/dj-qr.png")
+    def dj_qr() -> Response:
+        record = require_admin()
+        import io
+
+        import qrcode
+
+        buffer = io.BytesIO()
+        qrcode.make(_dj_url(record.admin_token)).save(buffer, format="PNG")
+        return Response(buffer.getvalue(), mimetype="image/png")
+
+    @bp.get("/api/dj/state")
+    def dj_state() -> Response:
+        """The stage, what's playing, the queue in order, and the singers."""
+        record = require_admin()
+        with runtime_state.db.session_scope() as db:
+            qm = QueueManager(db)
+            rotation = get_setting(db, "singer_rotation_on") == "1"
+            now = qm.now_playing(record.id)
+            ordered = qm.ordered_up_next(record.id, rotation)
+            singers = [{"id": u.id, "name": u.display_name} for u in list_users(db)]
+            return jsonify({
+                "stage": runtime_state.stage.snapshot(),
+                "now_playing": serialize_item(now) if now else None,
+                "queue": [dict(serialize_item(i), user_id=i.user_id) for i in ordered],
+                "singers": sorted(singers, key=lambda s: s["name"].casefold()),
+            })
+
+    @bp.get("/api/dj/singer/<int:user_id>/songs")
+    def dj_singer_songs(user_id: int) -> Response:
+        _ = require_admin()
+        with runtime_state.db.session_scope() as db:
+            songs = list_user_songs(db, user_id)
+            return jsonify([{"id": s.id, "title": s.title, "artist": s.artist, "service": s.service} for s in songs])
+
+    @bp.get("/api/dj/search")
+    def dj_search() -> Response:
+        """The guests' grouped library search, for the DJ."""
+        _ = require_admin()
+        with runtime_state.db.session_scope() as db:
+            _ensure_traditional_library_index(db)
+            return jsonify(grouped_library.search(db, request.args.get("q", "")))
+
+    @bp.get("/api/dj/search/artist")
+    def dj_search_artist() -> Response:
+        _ = require_admin()
+        key = request.args.get("key", "").strip()[:255]
+        if not key:
+            return jsonify([])
+        with runtime_state.db.session_scope() as db:
+            return jsonify(grouped_library.artist_songs(db, key, request.args.get("q", "")))
+
+    @bp.post("/api/dj/singer")
+    def dj_add_singer() -> Response:
+        """A new singer (someone without a phone): created, or found if the name exists."""
+        verify_csrf()
+        _ = require_admin()
+        data = request.get_json(silent=True) or {}
+        try:
+            name = validate_display_name(str(data.get("name") or ""))
+        except ValueError as exc:
+            return jsonify({"ok": False, "message": str(exc)}), 400
+        with runtime_state.db.session_scope() as db:
+            user = create_or_get_user(db, name)
+            return jsonify({"ok": True, "id": user.id, "name": user.display_name})
+
+    def _dj_queue(db, record, user_id: int, song_id: int, next_up: bool) -> None:
+        qm = QueueManager(db)
+        item = qm.find_waiting_song(record.id, user_id, song_id) or qm.add_song(record.id, user_id, song_id)
+        if next_up:
+            qm.move_to_top(item.id, get_setting(db, "singer_rotation_on") == "1")
+
+    @bp.post("/api/dj/queue")
+    def dj_queue_song() -> Response:
+        """Queue a singer's saved song, or a library song for them (saved to their list
+        first). next=true puts it next in line."""
+        verify_csrf()
+        record = require_admin()
+        data = request.get_json(silent=True) or {}
+        user_id = int(data.get("user_id") or 0)
+        next_up = bool(data.get("next"))
+        with runtime_state.db.session_scope() as db:
+            if not db.get(User, user_id):
+                return jsonify({"ok": False, "message": "Pick a singer."}), 400
+            song_id = int(data.get("song_id") or 0)
+            library_id = int(data.get("library_id") or 0)
+            if library_id:
+                existing = next((s for s in list_user_songs(db, user_id) if s.karaoke_library_id == library_id), None)
+                if existing:
+                    song_id = existing.id
+                else:
+                    try:
+                        song = create_song(db, user_id=user_id, service="traditional", karaoke_library_id=library_id,
+                                           title=validate_song_title(str(data.get("title") or "")),
+                                           artist=validate_artist_name(str(data.get("artist") or "")))
+                    except ValueError as exc:
+                        return jsonify({"ok": False, "message": str(exc)}), 400
+                    song_id = song.id
+            song = db.get(Song, song_id)
+            if not song or song.user_id != user_id:
+                return jsonify({"ok": False, "message": "Pick one of their songs."}), 400
+            try:
+                _dj_queue(db, record, user_id, song_id, next_up)
+            except ValueError as exc:
+                return jsonify({"ok": False, "message": str(exc)}), 400
+        emit_queue_update()
+        return jsonify({"ok": True})
+
+    @bp.post("/api/dj/item/<int:item_id>/<action>")
+    def dj_item(item_id: int, action: str) -> Response:
+        """top / up / down / remove for a waiting song."""
+        verify_csrf()
+        _ = require_admin()
+        with runtime_state.db.session_scope() as db:
+            qm = QueueManager(db)
+            rotation = get_setting(db, "singer_rotation_on") == "1"
+            try:
+                if action == "top":
+                    qm.move_to_top(item_id, rotation)
+                elif action in ("up", "down"):
+                    qm.move_item(item_id, action, rotation)
+                elif action == "remove":
+                    qm.remove_item(item_id)
+                else:
+                    return jsonify({"ok": False, "message": "Unknown action."}), 400
+            except ValueError as exc:
+                return jsonify({"ok": False, "message": str(exc)}), 400
+        emit_queue_update()
+        return jsonify({"ok": True})
+
+    @bp.post("/api/dj/stage/<action>")
+    def dj_stage(action: str) -> Response:
+        """start_next: start whoever is up now; end: end the song and call the next singer;
+        restart: play the current song again from the start."""
+        verify_csrf()
+        record = require_admin()
+        stage = runtime_state.stage
+        stage.set_base_url(request.host_url)
+        if action == "start_next":
+            if stage.state == IDLE:
+                stage.open()
+            ok, message = stage.singer_ready("dj")
+        elif action == "end":
+            if stage.state == IDLE:
+                return jsonify({"ok": False, "message": "The stage isn't open."}), 409
+            stage.song_finished()
+            ok, message = True, ""
+        elif action == "restart":
+            with runtime_state.db.session_scope() as db:
+                now = QueueManager(db).now_playing(record.id)
+                now_id = now.id if now else None
+            if now_id is None:
+                return jsonify({"ok": False, "message": "Nothing is playing."}), 409
+            ok, message = stage.start_item(now_id)
+        else:
+            return jsonify({"ok": False, "message": "Unknown action."}), 400
+        emit_queue_update()
+        return jsonify({"ok": ok, "message": message}), (200 if ok else 409)
 
     app.register_blueprint(bp)

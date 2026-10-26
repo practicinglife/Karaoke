@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="DJ">
+  <title>Karaoke Ticker - DJ</title>
+  {% include "_icons.html" %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="dj-page">
+  <main class="container">
+    <h1><img class="brand-logo" src="{{ url_for('static', filename='img/karaoke-ticker-icon-192.png') }}" alt="" width="48" height="48">DJ · {{ house_name }}</h1>
+    <div id="dj-message" class="dj-message" role="status" aria-live="polite" hidden></div>
+
+    <section class="card">
+      <h2>Stage</h2>
+      <div id="dj-stage-state" class="dj-stage-state"></div>
+      <div id="dj-now" class="dj-now"></div>
+      <div class="dj-buttons">
+        <button type="button" class="dj-go" data-stage="start_next">START NEXT SINGER</button>
+        <button type="button" data-stage="end">END SONG</button>
+        <button type="button" data-stage="restart">RESTART SONG</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Queue</h2>
+      <ol id="dj-queue" class="dj-queue"></ol>
+    </section>
+
+    <section class="card">
+      <h2>Queue a song</h2>
+      <label for="dj-singer">Singer</label>
+      <select id="dj-singer"></select>
+      <div id="dj-new-singer" class="dj-new-singer" hidden>
+        <label for="dj-new-name">New singer's name</label>
+        <input id="dj-new-name" type="text" maxlength="40" autocomplete="off">
+        <button type="button" id="dj-new-add">ADD SINGER</button>
+      </div>
+      <div id="dj-song-area" hidden>
+        <h3>Their songs</h3>
+        <ul id="dj-saved" class="dj-list"></ul>
+        <h3>Find a song</h3>
+        <input id="dj-search" type="search" placeholder="Song or artist" autocomplete="off">
+        <ul id="dj-results" class="dj-list"></ul>
+      </div>
+    </section>
+  </main>
+  <script>
+    window.KT_DJ = { token: {{ token|tojson }}, csrf: {{ csrf_token|tojson }} };
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="{{ url_for('static', filename='js/dj.js') }}"></script>
+</body>
+</html>
