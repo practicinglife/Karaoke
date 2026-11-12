@@ -619,3 +619,24 @@ a {
   font-size: 0.85rem;
   color: #9a9a9a;
 }
+
+/* DJ phone page */
+.dj-page h2 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+.dj-page h3 { margin: 1rem 0 0.25rem; font-size: 1rem; }
+.dj-message { position: sticky; top: 0; z-index: 5; padding: 0.6rem; margin-bottom: 0.75rem; border-radius: 6px; background: #1f4d2b; }
+.dj-message.dj-error { background: #6b1f1f; }
+.dj-stage-state { font-weight: bold; }
+.dj-now { margin: 0.4rem 0; }
+.dj-label { color: #6fdc8c; font-weight: bold; }
+.dj-buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+.dj-buttons button { flex: 1 1 8rem; padding: 0.8rem; font-weight: bold; }
+.dj-page button.dj-go { background: #1f7a3a; border-color: #2a9a4b; }
+.dj-page button.dj-remove { background: #5a2020; border-color: #7a2a2a; }
+.dj-queue, .dj-list { list-style: none; margin: 0; padding: 0; }
+.dj-item { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.5rem 0; border-bottom: 1px solid #2a2a2a; }
+.dj-song { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.dj-artist { color: #9a9a9a; }
+.dj-tools { display: flex; gap: 0.35rem; }
+.dj-tools button { min-width: 2.75rem; margin-top: 0; padding: 0.55rem 0.7rem; }
+.dj-artist-btn { width: 100%; text-align: left; margin-top: 0.4rem; }
+.dj-artist-row > .dj-list { padding-left: 0.75rem; }
