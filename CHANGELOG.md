@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.12 — 2026-11-12
+
+### Added
+- **DJ phone page:** run the night from your own phone. Scan the QR on the admin page (or
+  **SHOW DJ QR** in the app) to queue a saved or library song for any singer, next or at the
+  end; add a singer who has no phone; move songs to the top, up, down or remove them; and start
+  the next singer, end the song or restart it.
+
 ## v1.1.11 — 2026-10-21
 
 ### Added
